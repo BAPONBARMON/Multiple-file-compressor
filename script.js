@@ -51,9 +51,11 @@ let lastPreviewResult = null;
 init();
 
 function init() {
+  // ONLY button opens system file manager
   chooseBtn.addEventListener("click", (e) => {
     e.preventDefault();
     e.stopPropagation();
+    fileInput.value = "";
     fileInput.click();
   });
 
@@ -61,6 +63,7 @@ function init() {
     handleSelectedFiles(e.target.files);
   });
 
+  // Dropzone = drag & drop only
   dropzone.addEventListener("dragover", (e) => {
     e.preventDefault();
     dropzone.classList.add("dragover");
@@ -120,6 +123,11 @@ function handleSelectedFiles(fileList) {
 
   if (supported.length !== incoming.length) {
     alert("Only JPG, PNG, WEBP and PDF files are supported.");
+  }
+
+  if (!supported.length) {
+    fileInput.value = "";
+    return;
   }
 
   if (uploadedFiles.length + supported.length > MAX_FILES) {
@@ -195,9 +203,14 @@ function renderFiles() {
       const img = document.createElement("img");
       img.src = item.previewUrl;
       img.alt = item.file.name;
+      img.onerror = () => {
+        previewBox.innerHTML = "";
+        previewBox.appendChild(badge);
+        previewBox.appendChild(createFallbackPreview("IMAGE", item.file.name));
+      };
       previewBox.appendChild(img);
     } else {
-      renderPdfThumbnail(item.file, previewBox, item.file.name);
+      renderPdfThumbnail(item.file, previewBox, item.file.name, false);
     }
 
     const meta = document.createElement("div");
@@ -236,6 +249,17 @@ function renderFiles() {
 
     fileGrid.appendChild(card);
   });
+}
+
+function createFallbackPreview(type, fileName) {
+  const wrap = document.createElement("div");
+  wrap.className = "pdf-placeholder";
+  wrap.innerHTML = `
+    <div class="pdf-icon">${type === "PDF" ? "📄" : "🖼"}</div>
+    <div>${type} File</div>
+    <div class="pdf-file-label">${escapeHtml(fileName)}</div>
+  `;
+  return wrap;
 }
 
 function openModal(fileId) {
@@ -317,6 +341,10 @@ function renderModalPreview(item) {
     const img = document.createElement("img");
     img.src = item.previewUrl;
     img.alt = item.file.name;
+    img.onerror = () => {
+      modalPreview.innerHTML = "";
+      modalPreview.appendChild(createFallbackPreview("IMAGE", item.file.name));
+    };
     modalPreview.appendChild(img);
   } else {
     renderPdfThumbnail(item.file, modalPreview, item.file.name, true);
@@ -327,13 +355,7 @@ async function renderPdfThumbnail(file, container, fileName = "PDF File", big = 
   container.innerHTML = "";
 
   if (!window.pdfjsLib) {
-    container.innerHTML = `
-      <div class="pdf-placeholder">
-        <div class="pdf-icon">📄</div>
-        <div>PDF File</div>
-        <div class="pdf-file-label">${escapeHtml(fileName)}</div>
-      </div>
-    `;
+    container.appendChild(createFallbackPreview("PDF", fileName));
     return;
   }
 
@@ -369,13 +391,7 @@ async function renderPdfThumbnail(file, container, fileName = "PDF File", big = 
 
     container.appendChild(wrap);
   } catch (err) {
-    container.innerHTML = `
-      <div class="pdf-placeholder">
-        <div class="pdf-icon">📄</div>
-        <div>PDF File</div>
-        <div class="pdf-file-label">${escapeHtml(fileName)}</div>
-      </div>
-    `;
+    container.appendChild(createFallbackPreview("PDF", fileName));
   }
 }
 
@@ -434,15 +450,13 @@ function renderFinalPreview(originalItem, result) {
     const img = document.createElement("img");
     img.src = result.previewUrl;
     img.alt = result.fileName;
+    img.onerror = () => {
+      resultPreviewVisual.innerHTML = "";
+      resultPreviewVisual.appendChild(createFallbackPreview("IMAGE", result.fileName));
+    };
     resultPreviewVisual.appendChild(img);
   } else {
-    resultPreviewVisual.innerHTML = `
-      <div class="pdf-placeholder">
-        <div class="pdf-icon">📄</div>
-        <div>${escapeHtml(result.formatLabel)} Ready</div>
-        <div class="pdf-file-label">${escapeHtml(result.fileName)}</div>
-      </div>
-    `;
+    resultPreviewVisual.appendChild(createFallbackPreview(result.formatLabel || "PDF", result.fileName));
   }
 }
 
@@ -462,7 +476,14 @@ async function processImageFile(file, settings) {
     };
   }
 
-  const blob = await processImageToTarget(file, outputFormat, targetBytes, finalDimensions.width, finalDimensions.height);
+  const blob = await processImageToTarget(
+    file,
+    outputFormat,
+    targetBytes,
+    finalDimensions.width,
+    finalDimensions.height
+  );
+
   return {
     blob,
     fileName: buildOutputName(customName, file.name, outputFormat === "jpeg" ? "jpg" : outputFormat),
@@ -576,6 +597,14 @@ async function processPdfToImage(file, outputFormat, targetBytes, customName = "
           height = Math.max(100, Math.floor(height * 0.92));
         } else {
           quality = Math.max(0.08, quality - 0.06);
+          if (quality <= 0.28) {
+            width = Math.max(100, Math.floor(width * 0.95));
+            height = Math.max(100, Math.floor(height * 0.95));
+          }
+        }
+      } else {
+        if (outputFormat !== "png" && quality < 0.98) {
+          quality = Math.min(0.98, quality + 0.03);
         }
       }
 
@@ -622,39 +651,4 @@ async function processImageToTarget(file, outputFormat, targetBytes, forcedWidth
 
   let attempts = 0;
   let bestBlob = blob;
-  let bestDiff = Math.abs(blob.size - targetBytes);
-
-  while (attempts < 22) {
-    if (Math.abs(blob.size - targetBytes) <= Math.max(12 * 1024, targetBytes * 0.08)) {
-      bestBlob = blob;
-      break;
-    }
-
-    if (blob.size > targetBytes) {
-      if (outputFormat === "png") {
-        width = Math.max(100, Math.floor(width * 0.92));
-        height = Math.max(100, Math.floor(height * 0.92));
-      } else {
-        quality = Math.max(0.08, quality - 0.06);
-      }
-    }
-
-    blob = await canvasExport(img, width, height, outputFormat, quality);
-
-    const diff = Math.abs(blob.size - targetBytes);
-    if (diff < bestDiff) {
-      bestDiff = diff;
-      bestBlob = blob;
-    }
-
-    attempts++;
-  }
-
-  return bestBlob;
-}
-
-async function imageToPdfBlob(img, width, height, targetBytes = null) {
-  if (!window.jspdf) throw new Error("jsPDF not loaded");
-  const { jsPDF } = window.jspdf;
-
-  const doc = new jsPDF(
+  let bestDiff = Math.abs(blob.size
