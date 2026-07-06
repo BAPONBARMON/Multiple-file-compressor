@@ -100,12 +100,22 @@
                 <option value="MB">MB</option>
               </select>
             </div>
-            <small>For images, output will try to match this size as closely as possible.</small>
+            <small>Image files will try to match the target size as closely as possible.</small>
           </div>
 
           <div class="field">
             <label for="outputFormat">Output Format</label>
             <select id="outputFormat"></select>
+          </div>
+
+          <div class="field image-only-field" id="widthFieldWrap">
+            <label for="outputWidth">Width (optional)</label>
+            <input type="number" id="outputWidth" min="1" placeholder="Leave blank to keep auto width" />
+          </div>
+
+          <div class="field image-only-field" id="heightFieldWrap">
+            <label for="outputHeight">Height (optional)</label>
+            <input type="number" id="outputHeight" min="1" placeholder="Leave blank to keep auto height" />
           </div>
 
           <div class="field">
@@ -127,7 +137,44 @@
 
       <div class="modal-footer">
         <button class="btn ghost" id="cancelBtn">Cancel</button>
+        <button class="btn ghost" id="previewBtn">Preview</button>
         <button class="btn primary" id="downloadBtn">Download</button>
+      </div>
+
+      <div class="result-preview hidden" id="resultPreviewBox">
+        <div class="result-preview-head">
+          <h4>Final Output Preview</h4>
+          <span class="result-badge" id="resultStatus">Ready</span>
+        </div>
+
+        <div class="result-preview-grid">
+          <div class="result-preview-visual">
+            <div id="resultPreviewVisual" class="result-preview-visual-inner"></div>
+          </div>
+
+          <div class="result-preview-info">
+            <div class="info-row">
+              <span>Output File Name</span>
+              <strong id="previewFileName">-</strong>
+            </div>
+            <div class="info-row">
+              <span>Output Format</span>
+              <strong id="previewFormat">-</strong>
+            </div>
+            <div class="info-row">
+              <span>Final Size</span>
+              <strong id="previewSize">-</strong>
+            </div>
+            <div class="info-row">
+              <span>Dimensions</span>
+              <strong id="previewDimensions">-</strong>
+            </div>
+            <div class="info-row">
+              <span>Original</span>
+              <strong id="previewOriginal">-</strong>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
