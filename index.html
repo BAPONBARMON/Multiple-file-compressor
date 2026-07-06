@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Multi File Compressor + Converter Pro</title>
+  <title>Multi File Compressor + Converter</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -12,7 +12,7 @@
       <div class="brand-wrap">
         <div class="brand-logo">⌘</div>
         <div>
-          <h1>Multi File Compressor + Converter Pro</h1>
+          <h1>Multi File Compressor + Converter</h1>
           <p class="subtitle">Upload up to 20 files • Total max 10 MB • Hacking Green UI</p>
         </div>
       </div>
@@ -26,7 +26,7 @@
           <span class="panel-tag">JPG / PNG / WEBP / PDF</span>
         </div>
 
-        <div class="dropzone" id="dropzone" role="button" tabindex="0">
+        <div class="dropzone" id="dropzone">
           <input
             type="file"
             id="fileInput"
@@ -38,12 +38,7 @@
             <div class="drop-icon">⬆</div>
             <h3>Select or Drop Files</h3>
             <p>Maximum 20 files • Combined upload size up to 10 MB</p>
-
-            <!-- button + label fallback -->
-            <div class="choose-wrap">
-              <button type="button" id="chooseBtn" class="btn primary">Choose Files</button>
-              <label for="fileInput" class="btn ghost choose-label">Choose Files (Fallback)</label>
-            </div>
+            <button type="button" id="chooseBtn" class="btn primary">Choose Files</button>
           </div>
         </div>
 
@@ -58,23 +53,15 @@
           </div>
         </div>
 
-        <div class="toolbar bulk-toolbar">
+        <div class="toolbar">
           <button class="btn ghost" id="clearAllBtn">Clear All</button>
-          <button class="btn ghost" id="downloadAllBtn">Download All</button>
-          <button class="btn primary" id="downloadZipBtn">Download ZIP</button>
         </div>
       </section>
 
       <section class="files-panel panel">
-        <div class="panel-head panel-head-wrap">
-          <div>
-            <h2>Uploaded Files</h2>
-            <span class="panel-tag">Preview + Per-file Download Settings</span>
-          </div>
-
-          <div class="bulk-actions">
-            <button class="btn ghost small-btn" id="applyAllBtn">Apply Same Settings To All</button>
-          </div>
+        <div class="panel-head">
+          <h2>Uploaded Files</h2>
+          <span class="panel-tag">Preview + Download Settings</span>
         </div>
 
         <div id="emptyState" class="empty-state">
@@ -113,7 +100,6 @@
                 <option value="MB">MB</option>
               </select>
             </div>
-            <small>Image/PDF output will try to get close to this size.</small>
           </div>
 
           <div class="field">
@@ -121,7 +107,7 @@
             <select id="outputFormat"></select>
           </div>
 
-          <div class="field image-only-field" id="dimensionFieldWrap">
+          <div class="field" id="dimensionFieldWrap">
             <label>Dimensions (optional)</label>
             <div class="dimension-row">
               <input type="number" id="outputWidth" min="1" placeholder="Width" />
@@ -148,7 +134,6 @@
 
       <div class="modal-footer">
         <button class="btn ghost" id="cancelBtn">Cancel</button>
-        <button class="btn ghost" id="applyCurrentToAllBtn">Apply To All</button>
         <button class="btn primary" id="previewBtn">Preview</button>
       </div>
     </div>
@@ -201,64 +186,6 @@
     </div>
   </div>
 
-  <!-- APPLY TO ALL MODAL -->
-  <div class="modal-overlay hidden" id="bulkOverlay">
-    <div class="modal bulk-modal">
-      <div class="modal-head">
-        <div>
-          <h3>Apply Same Settings To All Files</h3>
-          <p>Ye settings sab uploaded files par apply hongi</p>
-        </div>
-        <button class="icon-btn" id="closeBulkOverlayBtn">✕</button>
-      </div>
-
-      <div class="bulk-body">
-        <div class="settings-grid">
-          <div class="field">
-            <label for="bulkTargetSize">Target Size</label>
-            <div class="input-row">
-              <input type="number" id="bulkTargetSize" min="1" placeholder="e.g. 200" />
-              <select id="bulkSizeUnit">
-                <option value="KB">KB</option>
-                <option value="MB">MB</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="field">
-            <label for="bulkOutputFormat">Output Format</label>
-            <select id="bulkOutputFormat">
-              <option value="">Auto / Keep compatible</option>
-              <option value="jpeg">JPG / JPEG</option>
-              <option value="png">PNG</option>
-              <option value="webp">WEBP</option>
-              <option value="pdf">PDF</option>
-            </select>
-          </div>
-
-          <div class="field">
-            <label>Dimensions (images only, optional)</label>
-            <div class="dimension-row">
-              <input type="number" id="bulkOutputWidth" min="1" placeholder="Width" />
-              <input type="number" id="bulkOutputHeight" min="1" placeholder="Height" />
-            </div>
-          </div>
-
-          <div class="field">
-            <label for="bulkNamePrefix">File Name Prefix (optional)</label>
-            <input type="text" id="bulkNamePrefix" placeholder="e.g. doc" />
-          </div>
-        </div>
-      </div>
-
-      <div class="modal-footer">
-        <button class="btn ghost" id="cancelBulkBtn">Cancel</button>
-        <button class="btn primary" id="saveBulkBtn">Save Bulk Settings</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- libs -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script>
     if (window["pdfjsLib"]) {
@@ -266,9 +193,8 @@
         "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
     }
   </script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="script.js"></script>
 </body>
 </html>
