@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Multi File Compressor & Converter</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand-wrap">
+        <div class="brand-logo">⌘</div>
+        <div>
+          <h1>Multi File Compressor + Converter</h1>
+          <p class="subtitle">Upload up to 20 files • Total max 10 MB • Hacking Green UI</p>
+        </div>
+      </div>
+      <div class="status-badge">CLIENT SIDE ONLY</div>
+    </header>
+
+    <main class="main-grid">
+      <section class="upload-panel panel">
+        <div class="panel-head">
+          <h2>Upload Files</h2>
+          <span class="panel-tag">JPG / PNG / WEBP / PDF</span>
+        </div>
+
+        <div class="dropzone" id="dropzone">
+          <input
+            type="file"
+            id="fileInput"
+            multiple
+            accept=".jpg,.jpeg,.png,.webp,.pdf"
+            hidden
+          />
+          <div class="dropzone-inner">
+            <div class="drop-icon">⬆</div>
+            <h3>Select or Drop Files</h3>
+            <p>Maximum 20 files • Combined upload size up to 10 MB</p>
+            <button id="chooseBtn" class="btn primary">Choose Files</button>
+          </div>
+        </div>
+
+        <div class="upload-stats">
+          <div class="stat-box">
+            <span class="stat-label">Files</span>
+            <span class="stat-value" id="fileCount">0 / 20</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-label">Total Size</span>
+            <span class="stat-value" id="totalSize">0 MB / 10 MB</span>
+          </div>
+        </div>
+
+        <div class="toolbar">
+          <button class="btn ghost" id="clearAllBtn">Clear All</button>
+        </div>
+      </section>
+
+      <section class="files-panel panel">
+        <div class="panel-head">
+          <h2>Uploaded Files</h2>
+          <span class="panel-tag">Preview + Download Settings</span>
+        </div>
+
+        <div id="emptyState" class="empty-state">
+          <div class="empty-icon">🗂</div>
+          <p>No files uploaded yet.</p>
+        </div>
+
+        <div id="fileGrid" class="file-grid"></div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Modal -->
+  <div class="modal-overlay hidden" id="modalOverlay">
+    <div class="modal">
+      <div class="modal-head">
+        <div>
+          <h3 id="modalTitle">Download Settings</h3>
+          <p id="modalSub">Configure output size, format and file name</p>
+        </div>
+        <button class="icon-btn" id="closeModalBtn">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="modal-preview-wrap">
+          <div id="modalPreview" class="modal-preview"></div>
+        </div>
+
+        <div class="settings-grid">
+          <div class="field">
+            <label for="targetSize">Target Size</label>
+            <div class="input-row">
+              <input type="number" id="targetSize" min="1" placeholder="e.g. 200" />
+              <select id="sizeUnit">
+                <option value="KB">KB</option>
+                <option value="MB">MB</option>
+              </select>
+            </div>
+            <small>For images, output will try to match this size as closely as possible.</small>
+          </div>
+
+          <div class="field">
+            <label for="outputFormat">Output Format</label>
+            <select id="outputFormat"></select>
+          </div>
+
+          <div class="field">
+            <label for="outputName">File Name (optional)</label>
+            <input type="text" id="outputName" placeholder="Leave blank for auto name" />
+          </div>
+
+          <div class="field readonly-field">
+            <label>Original File</label>
+            <div id="originalInfo" class="readonly-box">-</div>
+          </div>
+
+          <div class="field readonly-field">
+            <label>Mode</label>
+            <div id="modeInfo" class="readonly-box">-</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn ghost" id="cancelBtn">Cancel</button>
+        <button class="btn primary" id="downloadBtn">Download</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PDF.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>
+    if (window['pdfjsLib']) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc =
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    }
+  </script>
+
+  <!-- jsPDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <script src="script.js"></script>
+</body>
+</html>
