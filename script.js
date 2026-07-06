@@ -16,7 +16,11 @@ const modalOverlay = document.getElementById("modalOverlay");
 const closeModalBtn = document.getElementById("closeModalBtn");
 const cancelBtn = document.getElementById("cancelBtn");
 const previewBtn = document.getElementById("previewBtn");
-const downloadBtn = document.getElementById("downloadBtn");
+
+const previewOverlay = document.getElementById("previewOverlay");
+const closePreviewOverlayBtn = document.getElementById("closePreviewOverlayBtn");
+const backToEditBtn = document.getElementById("backToEditBtn");
+const finalDownloadBtn = document.getElementById("finalDownloadBtn");
 
 const modalTitle = document.getElementById("modalTitle");
 const modalSub = document.getElementById("modalSub");
@@ -28,20 +32,17 @@ const outputFormatSelect = document.getElementById("outputFormat");
 const outputNameInput = document.getElementById("outputName");
 const outputWidthInput = document.getElementById("outputWidth");
 const outputHeightInput = document.getElementById("outputHeight");
-const widthFieldWrap = document.getElementById("widthFieldWrap");
-const heightFieldWrap = document.getElementById("heightFieldWrap");
+const dimensionFieldWrap = document.getElementById("dimensionFieldWrap");
 
 const originalInfo = document.getElementById("originalInfo");
 const modeInfo = document.getElementById("modeInfo");
 
-const resultPreviewBox = document.getElementById("resultPreviewBox");
 const resultPreviewVisual = document.getElementById("resultPreviewVisual");
 const previewFileName = document.getElementById("previewFileName");
 const previewFormat = document.getElementById("previewFormat");
 const previewSize = document.getElementById("previewSize");
 const previewDimensions = document.getElementById("previewDimensions");
 const previewOriginal = document.getElementById("previewOriginal");
-const resultStatus = document.getElementById("resultStatus");
 
 let uploadedFiles = [];
 let activeFileId = null;
@@ -71,36 +72,38 @@ clearAllBtn.addEventListener("click", () => {
 
 closeModalBtn.addEventListener("click", closeModal);
 cancelBtn.addEventListener("click", closeModal);
+
 modalOverlay.addEventListener("click", (e) => {
   if (e.target === modalOverlay) closeModal();
+});
+
+previewOverlay.addEventListener("click", (e) => {
+  if (e.target === previewOverlay) closePreviewOverlay();
+});
+
+closePreviewOverlayBtn.addEventListener("click", closePreviewOverlay);
+
+backToEditBtn.addEventListener("click", () => {
+  closePreviewOverlay();
+  modalOverlay.classList.remove("hidden");
 });
 
 previewBtn.addEventListener("click", async () => {
   await buildPreview();
 });
 
-downloadBtn.addEventListener("click", async () => {
+finalDownloadBtn.addEventListener("click", async () => {
   try {
-    downloadBtn.disabled = true;
-    downloadBtn.textContent = "Processing...";
-
-    // अगर preview पहले नहीं किया गया, तो पहले preview बनाओ
-    if (!lastPreviewResult) {
-      await buildPreview();
-    }
-
     if (!lastPreviewResult || !lastPreviewResult.blob) {
-      throw new Error("No preview result available");
+      alert("Please generate preview first.");
+      return;
     }
-
     triggerDownload(lastPreviewResult.blob, lastPreviewResult.fileName);
+    closePreviewOverlay();
     closeModal();
   } catch (err) {
     console.error(err);
-    alert("Download failed. Please try preview once and check settings.");
-  } finally {
-    downloadBtn.disabled = false;
-    downloadBtn.textContent = "Download";
+    alert("Download failed.");
   }
 });
 
@@ -113,7 +116,7 @@ function handleSelectedFiles(fileList) {
   });
 
   if (supported.length !== incoming.length) {
-    alert("Only JPG, PNG, WEBP and PDF files are supported in this version.");
+    alert("Only JPG, PNG, WEBP and PDF files are supported.");
   }
 
   if (uploadedFiles.length + supported.length > MAX_FILES) {
@@ -228,7 +231,6 @@ function removeFile(id) {
 function openModal(fileId) {
   activeFileId = fileId;
   lastPreviewResult = null;
-  resetResultPreview();
 
   const item = uploadedFiles.find((f) => f.id === fileId);
   if (!item) return;
@@ -244,13 +246,11 @@ function openModal(fileId) {
   originalInfo.textContent = `${item.file.name} • ${formatBytes(item.file.size)} • ${item.file.type}`;
 
   if (item.typeCategory === "image") {
-    modeInfo.textContent = "Image: compression + conversion + image to PDF + rename + optional width/height";
-    widthFieldWrap.classList.remove("hidden");
-    heightFieldWrap.classList.remove("hidden");
+    modeInfo.textContent = "Image: compression + JPG/PNG/WEBP/PDF convert + rename + width/height";
+    dimensionFieldWrap.classList.remove("hidden");
   } else {
-    modeInfo.textContent = "PDF: preview + PDF export + rename";
-    widthFieldWrap.classList.add("hidden");
-    heightFieldWrap.classList.add("hidden");
+    modeInfo.textContent = "PDF: PDF/JPG/PNG/WEBP convert + rename";
+    dimensionFieldWrap.classList.add("hidden");
   }
 
   setupOutputFormats(item);
@@ -263,19 +263,11 @@ function closeModal() {
   modalOverlay.classList.add("hidden");
   modalPreview.innerHTML = "";
   activeFileId = null;
-  lastPreviewResult = null;
-  resetResultPreview();
 }
 
-function resetResultPreview() {
-  resultPreviewBox.classList.add("hidden");
+function closePreviewOverlay() {
+  previewOverlay.classList.add("hidden");
   resultPreviewVisual.innerHTML = "";
-  previewFileName.textContent = "-";
-  previewFormat.textContent = "-";
-  previewSize.textContent = "-";
-  previewDimensions.textContent = "-";
-  previewOriginal.textContent = "-";
-  resultStatus.textContent = "Ready";
 }
 
 function setupOutputFormats(item) {
@@ -300,10 +292,21 @@ function setupOutputFormats(item) {
     else if (item.file.type === "image/webp") outputFormatSelect.value = "webp";
     else outputFormatSelect.value = "jpeg";
   } else {
-    const opt = document.createElement("option");
-    opt.value = "pdf";
-    opt.textContent = "PDF";
-    outputFormatSelect.appendChild(opt);
+    const formats = [
+      { value: "pdf", label: "PDF" },
+      { value: "jpeg", label: "JPG / JPEG" },
+      { value: "png", label: "PNG" },
+      { value: "webp", label: "WEBP" }
+    ];
+
+    formats.forEach((f) => {
+      const opt = document.createElement("option");
+      opt.value = f.value;
+      opt.textContent = f.label;
+      outputFormatSelect.appendChild(opt);
+    });
+
+    outputFormatSelect.value = "pdf";
   }
 }
 
@@ -356,23 +359,16 @@ async function renderPdfThumbnail(file, container, bigger = false, fileName = "P
     wrap.style.justifyContent = "center";
     wrap.style.gap = "8px";
 
-    const badge = document.createElement("div");
-    badge.className = "file-type-badge";
-    badge.style.position = "static";
-    badge.textContent = "PDF";
-
     const label = document.createElement("div");
     label.className = "pdf-file-label";
     label.textContent = fileName;
 
-    wrap.appendChild(badge);
     wrap.appendChild(canvas);
     wrap.appendChild(label);
 
     container.innerHTML = "";
     container.appendChild(wrap);
   } catch (e) {
-    console.warn("PDF preview failed", e);
     container.innerHTML = `
       <div class="pdf-placeholder">
         <div class="pdf-icon">📄</div>
@@ -390,7 +386,6 @@ async function buildPreview() {
   try {
     previewBtn.disabled = true;
     previewBtn.textContent = "Preparing...";
-    resultStatus.textContent = "Processing...";
 
     const customName = outputNameInput.value.trim();
     const targetValue = parseFloat(targetSizeInput.value);
@@ -410,23 +405,28 @@ async function buildPreview() {
         customName
       });
     } else {
-      result = await processPdf(item.file, targetBytes, customName);
+      result = await processPdfFile(item.file, {
+        outputFormat,
+        targetBytes,
+        customName
+      });
     }
 
     lastPreviewResult = result;
-    renderResultPreview(item, result);
+    renderFinalPreview(item, result);
+
+    modalOverlay.classList.add("hidden");
+    previewOverlay.classList.remove("hidden");
   } catch (err) {
     console.error(err);
-    alert("Preview generation failed. Try smaller size or different settings.");
-    resultStatus.textContent = "Failed";
+    alert("Preview generation failed. Try different settings.");
   } finally {
     previewBtn.disabled = false;
     previewBtn.textContent = "Preview";
   }
 }
 
-function renderResultPreview(originalItem, result) {
-  resultPreviewBox.classList.remove("hidden");
+function renderFinalPreview(originalItem, result) {
   resultPreviewVisual.innerHTML = "";
 
   previewFileName.textContent = result.fileName;
@@ -434,23 +434,20 @@ function renderResultPreview(originalItem, result) {
   previewSize.textContent = formatBytes(result.blob.size);
   previewDimensions.textContent = result.dimensionsText || "-";
   previewOriginal.textContent = `${originalItem.file.name} • ${formatBytes(originalItem.file.size)}`;
-  resultStatus.textContent = "Ready";
 
   if (result.previewType === "image" && result.previewUrl) {
     const img = document.createElement("img");
     img.src = result.previewUrl;
     img.alt = result.fileName;
     resultPreviewVisual.appendChild(img);
-  } else if (result.previewType === "pdf") {
+  } else {
     resultPreviewVisual.innerHTML = `
       <div class="pdf-placeholder">
         <div class="pdf-icon">📄</div>
-        <div>PDF Ready</div>
+        <div>${escapeHtml(result.formatLabel)} Ready</div>
         <div class="pdf-file-label">${escapeHtml(result.fileName)}</div>
       </div>
     `;
-  } else {
-    resultPreviewVisual.innerHTML = `<div class="pdf-placeholder"><div>Preview not available</div></div>`;
   }
 }
 
@@ -487,65 +484,17 @@ async function processImageFile(file, options) {
   };
 }
 
-async function processImageToTarget(file, outputFormat, targetBytes, forcedWidth = null, forcedHeight = null) {
-  const img = await loadImageFromFile(file);
+async function processPdfFile(file, options) {
+  const { outputFormat, targetBytes, customName } = options;
 
-  let width = forcedWidth || img.width;
-  let height = forcedHeight || img.height;
-  let quality = 0.92;
-
-  let blob = await canvasExport(img, width, height, outputFormat, quality);
-
-  if (!targetBytes) return blob;
-
-  let attempts = 0;
-  let bestBlob = blob;
-  let bestDiff = Math.abs(blob.size - targetBytes);
-
-  while (attempts < 22) {
-    const diff = blob.size - targetBytes;
-    const tolerance = Math.max(12 * 1024, targetBytes * 0.08);
-
-    if (Math.abs(diff) <= tolerance) {
-      bestBlob = blob;
-      break;
-    }
-
-    if (blob.size > targetBytes) {
-      if (outputFormat === "png") {
-        width = Math.max(100, Math.floor(width * 0.92));
-        height = Math.max(100, Math.floor(height * 0.92));
-      } else {
-        quality = Math.max(0.08, quality - 0.06);
-        if (quality <= 0.28) {
-          width = Math.max(100, Math.floor(width * 0.95));
-          height = Math.max(100, Math.floor(height * 0.95));
-        }
-      }
-    } else {
-      if (outputFormat !== "png" && quality < 0.98) {
-        quality = Math.min(0.98, quality + 0.03);
-      } else {
-        width = Math.floor(width * 1.03);
-        height = Math.floor(height * 1.03);
-      }
-    }
-
-    blob = await canvasExport(img, width, height, outputFormat, quality);
-
-    const currentDiff = Math.abs(blob.size - targetBytes);
-    if (currentDiff < bestDiff) {
-      bestDiff = currentDiff;
-      bestBlob = blob;
-    }
-
-    attempts++;
+  if (outputFormat === "pdf") {
+    return await processPdfToPdf(file, targetBytes, customName);
+  } else {
+    return await processPdfToImage(file, outputFormat, targetBytes, customName);
   }
-
-  return bestBlob;
 }
 
-async function processPdf(file, targetBytes, customName = "") {
+async function processPdfToPdf(file, targetBytes, customName = "") {
   if (!window.pdfjsLib || !window.jspdf) {
     return {
       blob: file,
@@ -602,34 +551,94 @@ async function processPdf(file, targetBytes, customName = "") {
   };
 }
 
-async function imageToPdfBlob(img, width, height, targetBytes = null) {
-  if (!window.jspdf) throw new Error("jsPDF not loaded");
-  const { jsPDF } = window.jspdf;
+async function processPdfToImage(file, outputFormat, targetBytes, customName = "") {
+  if (!window.pdfjsLib) throw new Error("PDF library not loaded");
 
-  const doc = new jsPDF({
-    orientation: width >= height ? "landscape" : "portrait",
-    unit: "pt",
-    format: "a4",
-    compress: true
-  });
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const page = await pdf.getPage(1);
 
-  let quality = 0.9;
+  const viewport = page.getViewport({ scale: 2 });
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  canvas.width = viewport.width;
+  canvas.height = viewport.height;
+
+  await page.render({ canvasContext: ctx, viewport }).promise;
+
+  let quality = 0.92;
+  let width = canvas.width;
+  let height = canvas.height;
+
+  let blob = await canvasToBlob(canvas, outputFormat, quality);
+
   if (targetBytes) {
-    if (targetBytes < 250 * 1024) quality = 0.42;
-    else if (targetBytes < 600 * 1024) quality = 0.58;
-    else if (targetBytes < 1024 * 1024) quality = 0.72;
-    else quality = 0.85;
+    let attempts = 0;
+    let bestBlob = blob;
+    let bestDiff = Math.abs(blob.size - targetBytes);
+
+    while (attempts < 18) {
+      const diff = blob.size - targetBytes;
+      const tolerance = Math.max(12 * 1024, targetBytes * 0.08);
+
+      if (Math.abs(diff) <= tolerance) {
+        bestBlob = blob;
+        break;
+      }
+
+      if (blob.size > targetBytes) {
+        if (outputFormat === "png") {
+          width = Math.max(100, Math.floor(width * 0.92));
+          height = Math.max(100, Math.floor(height * 0.92));
+        } else {
+          quality = Math.max(0.08, quality - 0.06);
+          if (quality <= 0.28) {
+            width = Math.max(100, Math.floor(width * 0.95));
+            height = Math.max(100, Math.floor(height * 0.95));
+          }
+        }
+      } else {
+        if (outputFormat !== "png" && quality < 0.98) {
+          quality = Math.min(0.98, quality + 0.03);
+        }
+      }
+
+      const resizedCanvas = document.createElement("canvas");
+      resizedCanvas.width = width;
+      resizedCanvas.height = height;
+      const rctx = resizedCanvas.getContext("2d");
+      rctx.drawImage(canvas, 0, 0, width, height);
+
+      blob = await canvasToBlob(resizedCanvas, outputFormat, quality);
+
+      const currentDiff = Math.abs(blob.size - targetBytes);
+      if (currentDiff < bestDiff) {
+        bestDiff = currentDiff;
+        bestBlob = blob;
+      }
+
+      attempts++;
+    }
+
+    blob = bestBlob;
   }
 
-  const tempCanvas = document.createElement("canvas");
-  tempCanvas.width = width;
-  tempCanvas.height = height;
-  const ctx = tempCanvas.getContext("2d");
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, width, height);
-  ctx.drawImage(img, 0, 0, width, height);
+  const ext = outputFormat === "jpeg" ? "jpg" : outputFormat;
+  const fileName = buildOutputName(customName, file.name, ext);
+  const previewUrl = URL.createObjectURL(blob);
 
-  const imgData = tempCanvas.toDataURL("image/jpeg", quality);
+  return {
+    blob,
+    fileName,
+    previewType: "image",
+    previewUrl,
+    formatLabel: outputFormat.toUpperCase(),
+    dimensionsText: `${width} × ${height}px (PDF page 1)`
+  };
+}
 
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getH
+async function processImageToTarget(file, outputFormat, targetBytes, forcedWidth = null, forcedHeight = null) {
+  const img = await loadImageFromFile(file);
+
+  let width = forcedWidth || img.width;
+  let height =
