@@ -651,4 +651,370 @@ async function processPdfToPdf(file, targetBytes, customName = "") {
     await page.render({ canvasContext: ctx, viewport }).promise;
 
     let quality = 0.82;
-    if (t
+    if (targetBytes) {
+      if (targetBytes < 300 * 1024) quality = 0.42;
+      else if (targetBytes < 700 * 1024) quality = 0.58;
+      else quality = 0.72;
+    }
+
+    const imgData = canvas.toDataURL("image/jpeg", quality);
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+
+    if (i > 1) doc.addPage();
+    doc.addImage(imgData, "JPEG", 0, 0, pageWidth, pageHeight);
+  }
+
+  return {
+    blob: doc.output("blob"),
+    fileName: buildOutputName(customName, file.name, "pdf"),
+    previewType: "pdf",
+    formatLabel: "PDF",
+    dimensionsText: `${pageCount} page(s)`
+  };
+}
+
+async function processPdfToImage(file, outputFormat, targetBytes, customName = "") {
+  if (!window.pdfjsLib) throw new Error("PDF library not loaded");
+
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const page = await pdf.getPage(1);
+
+  let width, height;
+  let quality = 0.92;
+
+  const viewport = page.getViewport({ scale: 2 });
+  const sourceCanvas = document.createElement("canvas");
+  const sourceCtx = sourceCanvas.getContext("2d");
+  sourceCanvas.width = viewport.width;
+  sourceCanvas.height = viewport.height;
+
+  await page.render({ canvasContext: sourceCtx, viewport }).promise;
+
+  width = sourceCanvas.width;
+  height = sourceCanvas.height;
+
+  let blob = await canvasToBlob(sourceCanvas, outputFormat, quality);
+
+  if (targetBytes) {
+    let attempts = 0;
+    let bestBlob = blob;
+    let bestDiff = Math.abs(blob.size - targetBytes);
+
+    while (attempts < 18) {
+      if (Math.abs(blob.size - targetBytes) <= Math.max(12 * 1024, targetBytes * 0.08)) {
+        bestBlob = blob;
+        break;
+      }
+
+      if (blob.size > targetBytes) {
+        if (outputFormat === "png") {
+          width = Math.max(100, Math.floor(width * 0.92));
+          height = Math.max(100, Math.floor(height * 0.92));
+        } else {
+          quality = Math.max(0.08, quality - 0.06);
+          if (quality <= 0.28) {
+            width = Math.max(100, Math.floor(width * 0.95));
+            height = Math.max(100, Math.floor(height * 0.95));
+          }
+        }
+      } else {
+        if (outputFormat !== "png" && quality < 0.98) {
+          quality = Math.min(0.98, quality + 0.03);
+        }
+      }
+
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(sourceCanvas, 0, 0, width, height);
+
+      blob = await canvasToBlob(canvas, outputFormat, quality);
+
+      const diff = Math.abs(blob.size - targetBytes);
+      if (diff < bestDiff) {
+        bestDiff = diff;
+        bestBlob = blob;
+      }
+
+      attempts++;
+    }
+
+    blob = bestBlob;
+  }
+
+  return {
+    blob,
+    fileName: buildOutputName(customName, file.name, outputFormat === "jpeg" ? "jpg" : outputFormat),
+    previewType: "image",
+    previewUrl: URL.createObjectURL(blob),
+    formatLabel: outputFormat.toUpperCase(),
+    dimensionsText: `${width} × ${height}px (PDF page 1)`
+  };
+}
+
+async function processImageToTarget(file, outputFormat, targetBytes, forcedWidth = null, forcedHeight = null) {
+  const img = await loadImageFromFile(file);
+
+  let width = forcedWidth || img.width;
+  let height = forcedHeight || img.height;
+  let quality = 0.92;
+
+  let blob = await canvasExport(img, width, height, outputFormat, quality);
+
+  if (!targetBytes) return blob;
+
+  let attempts = 0;
+  let bestBlob = blob;
+  let bestDiff = Math.abs(blob.size - targetBytes);
+
+  while (attempts < 22) {
+    if (Math.abs(blob.size - targetBytes) <= Math.max(12 * 1024, targetBytes * 0.08)) {
+      bestBlob = blob;
+      break;
+    }
+
+    if (blob.size > targetBytes) {
+      if (outputFormat === "png") {
+        width = Math.max(100, Math.floor(width * 0.92));
+        height = Math.max(100, Math.floor(height * 0.92));
+      } else {
+        quality = Math.max(0.08, quality - 0.06);
+        if (quality <= 0.28) {
+          width = Math.max(100, Math.floor(width * 0.95));
+          height = Math.max(100, Math.floor(height * 0.95));
+        }
+      }
+    } else {
+      if (outputFormat !== "png" && quality < 0.98) {
+        quality = Math.min(0.98, quality + 0.03);
+      }
+    }
+
+    blob = await canvasExport(img, width, height, outputFormat, quality);
+
+    const diff = Math.abs(blob.size - targetBytes);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      bestBlob = blob;
+    }
+
+    attempts++;
+  }
+
+  return bestBlob;
+}
+
+async function imageToPdfBlob(img, width, height, targetBytes = null) {
+  if (!window.jspdf) throw new Error("jsPDF not loaded");
+  const { jsPDF } = window.jspdf;
+
+  const doc = new jsPDF({
+    orientation: width >= height ? "landscape" : "portrait",
+    unit: "pt",
+    format: "a4",
+    compress: true
+  });
+
+  let quality = 0.9;
+  if (targetBytes) {
+    if (targetBytes < 250 * 1024) quality = 0.42;
+    else if (targetBytes < 600 * 1024) quality = 0.58;
+    else if (targetBytes < 1024 * 1024) quality = 0.72;
+    else quality = 0.85;
+  }
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, width, height);
+  ctx.drawImage(img, 0, 0, width, height);
+
+  const imgData = canvas.toDataURL("image/jpeg", quality);
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+
+  const fit = fitInside(width, height, pageWidth, pageHeight);
+  const x = (pageWidth - fit.width) / 2;
+  const y = (pageHeight - fit.height) / 2;
+
+  doc.addImage(imgData, "JPEG", x, y, fit.width, fit.height);
+  return doc.output("blob");
+}
+
+/* =========================
+   HELPERS
+========================= */
+async function generatePdfThumbDataUrl(file) {
+  if (!window.pdfjsLib) return null;
+
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const page = await pdf.getPage(1);
+
+  const viewport = page.getViewport({ scale: 0.8 });
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+
+  canvas.width = viewport.width;
+  canvas.height = viewport.height;
+
+  await page.render({ canvasContext: ctx, viewport }).promise;
+  return canvas.toDataURL("image/jpeg", 0.85);
+}
+
+function readFileAsDataURL(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function calculateOutputDimensions(originalWidth, originalHeight, targetWidth, targetHeight) {
+  if (targetWidth && targetHeight) return { width: targetWidth, height: targetHeight };
+
+  if (targetWidth && !targetHeight) {
+    return {
+      width: targetWidth,
+      height: Math.round((originalHeight / originalWidth) * targetWidth)
+    };
+  }
+
+  if (!targetWidth && targetHeight) {
+    return {
+      width: Math.round((originalWidth / originalHeight) * targetHeight),
+      height: targetHeight
+    };
+  }
+
+  return { width: originalWidth, height: originalHeight };
+}
+
+function fitInside(srcW, srcH, maxW, maxH) {
+  const ratio = Math.min(maxW / srcW, maxH / srcH);
+  return {
+    width: srcW * ratio,
+    height: srcH * ratio
+  };
+}
+
+function loadImageFromFile(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(img);
+    };
+    img.onerror = (e) => {
+      URL.revokeObjectURL(url);
+      reject(e);
+    };
+    img.src = url;
+  });
+}
+
+function canvasExport(img, width, height, format, quality = 0.92) {
+  return new Promise((resolve, reject) => {
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+
+    canvas.width = width;
+    canvas.height = height;
+
+    if (format === "jpeg") {
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, width, height);
+    }
+
+    ctx.drawImage(img, 0, 0, width, height);
+
+    const mime = format === "jpeg"
+      ? "image/jpeg"
+      : format === "png"
+      ? "image/png"
+      : "image/webp";
+
+    canvas.toBlob(
+      blob => {
+        if (!blob) return reject(new Error("Blob generation failed"));
+        resolve(blob);
+      },
+      mime,
+      format === "png" ? undefined : quality
+    );
+  });
+}
+
+function canvasToBlob(canvas, format, quality = 0.92) {
+  return new Promise((resolve, reject) => {
+    const mime = format === "jpeg"
+      ? "image/jpeg"
+      : format === "png"
+      ? "image/png"
+      : "image/webp";
+
+    canvas.toBlob(
+      blob => {
+        if (!blob) return reject(new Error("Blob generation failed"));
+        resolve(blob);
+      },
+      mime,
+      format === "png" ? undefined : quality
+    );
+  });
+}
+
+function triggerDownload(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1200);
+}
+
+function buildOutputName(customName, originalName, ext) {
+  const cleanExt = ext.toLowerCase();
+  if (customName) {
+    return customName.includes(".") ? customName : `${customName}.${cleanExt}`;
+  }
+  const base = originalName.replace(/\.[^/.]+$/, "");
+  return `${base}-${Date.now()}.${cleanExt}`;
+}
+
+function convertToBytes(value, unit) {
+  return unit === "MB" ? value * 1024 * 1024 : value * 1024;
+}
+
+function parsePositiveInt(value) {
+  const n = parseInt(value, 10);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function formatBytes(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+function escapeHtml(str = "") {
+  return str
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function createId() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
