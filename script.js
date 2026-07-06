@@ -1,7 +1,5 @@
 const MAX_FILES = 20;
 const MAX_TOTAL_SIZE = 10 * 1024 * 1024; // 10MB
-const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
-const PDF_TYPE = "application/pdf";
 
 const fileInput = document.getElementById("fileInput");
 const chooseBtn = document.getElementById("chooseBtn");
@@ -50,117 +48,156 @@ let lastPreviewResult = null;
 
 init();
 
+/* ---------------- INIT ---------------- */
 function init() {
   if (!fileInput) {
     console.error("fileInput not found");
+    alert("fileInput not found in HTML.");
+    return;
   }
 
-  // label-for approach file picker open kar dega.
-  // change event yahin handle hoga.
+  // file select
   fileInput.addEventListener("change", (e) => {
-    handleSelectedFiles(e.target.files);
+    const files = e.target.files;
+    handleSelectedFiles(files);
   });
 
-  // extra safety: choose label ke click par input reset
+  // label click -> reset value so same file bhi dubara select ho sake
   if (chooseBtn) {
     chooseBtn.addEventListener("click", () => {
-      if (fileInput) fileInput.value = "";
+      fileInput.value = "";
     });
   }
 
-  // dropzone drag & drop
-  dropzone.addEventListener("dragover", (e) => {
-    e.preventDefault();
-    dropzone.classList.add("dragover");
-  });
+  // drag drop
+  if (dropzone) {
+    dropzone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      dropzone.classList.add("dragover");
+    });
 
-  dropzone.addEventListener("dragleave", () => {
-    dropzone.classList.remove("dragover");
-  });
+    dropzone.addEventListener("dragleave", () => {
+      dropzone.classList.remove("dragover");
+    });
 
-  dropzone.addEventListener("drop", (e) => {
-    e.preventDefault();
-    dropzone.classList.remove("dragover");
-    handleSelectedFiles(e.dataTransfer.files);
-  });
+    dropzone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dropzone.classList.remove("dragover");
+      handleSelectedFiles(e.dataTransfer.files);
+    });
+  }
 
-  clearAllBtn.addEventListener("click", clearAllFiles);
+  if (clearAllBtn) clearAllBtn.addEventListener("click", clearAllFiles);
 
-  closeModalBtn.addEventListener("click", closeModal);
-  cancelBtn.addEventListener("click", closeModal);
+  if (closeModalBtn) closeModalBtn.addEventListener("click", closeModal);
+  if (cancelBtn) cancelBtn.addEventListener("click", closeModal);
 
-  modalOverlay.addEventListener("click", (e) => {
-    if (e.target === modalOverlay) closeModal();
-  });
+  if (modalOverlay) {
+    modalOverlay.addEventListener("click", (e) => {
+      if (e.target === modalOverlay) closeModal();
+    });
+  }
 
-  previewBtn.addEventListener("click", buildPreview);
+  if (previewBtn) previewBtn.addEventListener("click", buildPreview);
 
-  closePreviewOverlayBtn.addEventListener("click", closePreviewOverlay);
-  backToEditBtn.addEventListener("click", () => {
-    closePreviewOverlay();
-    modalOverlay.classList.remove("hidden");
-  });
+  if (closePreviewOverlayBtn) closePreviewOverlayBtn.addEventListener("click", closePreviewOverlay);
 
-  previewOverlay.addEventListener("click", (e) => {
-    if (e.target === previewOverlay) closePreviewOverlay();
-  });
+  if (backToEditBtn) {
+    backToEditBtn.addEventListener("click", () => {
+      closePreviewOverlay();
+      modalOverlay.classList.remove("hidden");
+    });
+  }
 
-  finalDownloadBtn.addEventListener("click", () => {
-    if (!lastPreviewResult || !lastPreviewResult.blob) {
-      alert("Please generate preview first.");
-      return;
-    }
-    triggerDownload(lastPreviewResult.blob, lastPreviewResult.fileName);
-    closePreviewOverlay();
-    closeModal();
-  });
+  if (previewOverlay) {
+    previewOverlay.addEventListener("click", (e) => {
+      if (e.target === previewOverlay) closePreviewOverlay();
+    });
+  }
+
+  if (finalDownloadBtn) {
+    finalDownloadBtn.addEventListener("click", () => {
+      if (!lastPreviewResult || !lastPreviewResult.blob) {
+        alert("Please generate preview first.");
+        return;
+      }
+      triggerDownload(lastPreviewResult.blob, lastPreviewResult.fileName);
+      closePreviewOverlay();
+      closeModal();
+    });
+  }
 
   renderFiles();
 }
 
+/* ---------------- FILE TYPE HELPERS ---------------- */
+function getExtension(name = "") {
+  const parts = name.toLowerCase().split(".");
+  return parts.length > 1 ? parts.pop() : "";
+}
+
+function isImageFile(file) {
+  if (!file) return false;
+  const type = (file.type || "").toLowerCase();
+  const ext = getExtension(file.name);
+
+  return (
+    type.startsWith("image/") ||
+    ["jpg", "jpeg", "png", "webp"].includes(ext)
+  );
+}
+
+function isPdfFile(file) {
+  if (!file) return false;
+  const type = (file.type || "").toLowerCase();
+  const ext = getExtension(file.name);
+  return type === "application/pdf" || ext === "pdf";
+}
+
+/* ---------------- FILE HANDLING ---------------- */
 function handleSelectedFiles(fileList) {
   if (!fileList || !fileList.length) return;
 
   const incoming = Array.from(fileList);
-  const supported = incoming.filter(file =>
-    IMAGE_TYPES.includes(file.type) || file.type === PDF_TYPE
-  );
 
-  if (supported.length !== incoming.length) {
-    alert("Only JPG, PNG, WEBP and PDF files are supported.");
-  }
+  const supported = incoming.filter(file => isImageFile(file) || isPdfFile(file));
 
   if (!supported.length) {
-    if (fileInput) fileInput.value = "";
+    alert("Only JPG, JPEG, PNG, WEBP and PDF files are supported.");
+    fileInput.value = "";
     return;
+  }
+
+  if (supported.length !== incoming.length) {
+    alert("Some unsupported files were skipped.");
   }
 
   if (uploadedFiles.length + supported.length > MAX_FILES) {
     alert(`You can upload a maximum of ${MAX_FILES} files.`);
-    if (fileInput) fileInput.value = "";
+    fileInput.value = "";
     return;
   }
 
-  const currentTotal = uploadedFiles.reduce((sum, f) => sum + f.file.size, 0);
-  const incomingTotal = supported.reduce((sum, f) => sum + f.size, 0);
+  const currentTotal = uploadedFiles.reduce((sum, item) => sum + item.file.size, 0);
+  const incomingTotal = supported.reduce((sum, file) => sum + file.size, 0);
 
   if (currentTotal + incomingTotal > MAX_TOTAL_SIZE) {
     alert("Total upload size cannot exceed 10 MB.");
-    if (fileInput) fileInput.value = "";
+    fileInput.value = "";
     return;
   }
 
   supported.forEach(file => {
-    const isImage = IMAGE_TYPES.includes(file.type);
+    const image = isImageFile(file);
     uploadedFiles.push({
       id: createId(),
       file,
-      typeCategory: isImage ? "image" : "pdf",
-      previewUrl: isImage ? URL.createObjectURL(file) : null
+      typeCategory: image ? "image" : "pdf",
+      previewUrl: image ? URL.createObjectURL(file) : null
     });
   });
 
-  if (fileInput) fileInput.value = "";
+  fileInput.value = "";
   renderFiles();
 }
 
@@ -173,24 +210,30 @@ function clearAllFiles() {
 }
 
 function removeFile(id) {
-  const item = uploadedFiles.find(f => f.id === id);
+  const item = uploadedFiles.find(x => x.id === id);
   if (item?.previewUrl) URL.revokeObjectURL(item.previewUrl);
-  uploadedFiles = uploadedFiles.filter(f => f.id !== id);
+  uploadedFiles = uploadedFiles.filter(x => x.id !== id);
   renderFiles();
 }
 
+/* ---------------- MAIN GRID RENDER ---------------- */
 function renderFiles() {
+  if (!fileGrid) return;
+
   fileGrid.innerHTML = "";
 
-  fileCountEl.textContent = `${uploadedFiles.length} / ${MAX_FILES}`;
-  totalSizeEl.textContent = `${formatBytes(uploadedFiles.reduce((sum, f) => sum + f.file.size, 0))} / 10 MB`;
+  if (fileCountEl) fileCountEl.textContent = `${uploadedFiles.length} / ${MAX_FILES}`;
+  if (totalSizeEl) {
+    const total = uploadedFiles.reduce((sum, item) => sum + item.file.size, 0);
+    totalSizeEl.textContent = `${formatBytes(total)} / 10 MB`;
+  }
 
   if (!uploadedFiles.length) {
-    emptyState.classList.remove("hidden");
+    if (emptyState) emptyState.classList.remove("hidden");
     return;
   }
 
-  emptyState.classList.add("hidden");
+  if (emptyState) emptyState.classList.add("hidden");
 
   uploadedFiles.forEach(item => {
     const card = document.createElement("div");
@@ -206,13 +249,25 @@ function renderFiles() {
 
     if (item.typeCategory === "image") {
       const img = document.createElement("img");
-      img.src = item.previewUrl;
       img.alt = item.file.name;
+
+      if (item.previewUrl) {
+        img.src = item.previewUrl;
+      } else {
+        item.previewUrl = URL.createObjectURL(item.file);
+        img.src = item.previewUrl;
+      }
+
+      img.onload = () => {
+        // image ok
+      };
+
       img.onerror = () => {
         previewBox.innerHTML = "";
         previewBox.appendChild(badge);
         previewBox.appendChild(createFallbackPreview("IMAGE", item.file.name));
       };
+
       previewBox.appendChild(img);
     } else {
       renderPdfThumbnail(item.file, previewBox, item.file.name, false);
@@ -227,21 +282,21 @@ function renderFiles() {
 
     const fileSize = document.createElement("div");
     fileSize.className = "file-size";
-    fileSize.textContent = `${formatBytes(item.file.size)} • ${item.file.type || "unknown"}`;
+    fileSize.textContent = `${formatBytes(item.file.size)} • ${item.file.type || getExtension(item.file.name) || "unknown"}`;
 
     const actions = document.createElement("div");
     actions.className = "file-actions";
 
     const downloadBtn = document.createElement("button");
     downloadBtn.className = "btn primary";
-    downloadBtn.textContent = "Download";
     downloadBtn.type = "button";
+    downloadBtn.textContent = "Download";
     downloadBtn.addEventListener("click", () => openModal(item.id));
 
     const removeBtn = document.createElement("button");
     removeBtn.className = "btn danger";
-    removeBtn.textContent = "Remove";
     removeBtn.type = "button";
+    removeBtn.textContent = "Remove";
     removeBtn.addEventListener("click", () => removeFile(item.id));
 
     actions.appendChild(downloadBtn);
@@ -258,6 +313,7 @@ function renderFiles() {
   });
 }
 
+/* ---------------- PREVIEW HELPERS ---------------- */
 function createFallbackPreview(type, fileName) {
   const wrap = document.createElement("div");
   wrap.className = "pdf-placeholder";
@@ -269,6 +325,58 @@ function createFallbackPreview(type, fileName) {
   return wrap;
 }
 
+async function renderPdfThumbnail(file, container, fileName = "PDF File", big = false) {
+  container.innerHTML = "";
+
+  // badge wapas add
+  const badge = document.createElement("div");
+  badge.className = "file-type-badge";
+  badge.textContent = "PDF";
+  container.appendChild(badge);
+
+  if (!window.pdfjsLib) {
+    container.appendChild(createFallbackPreview("PDF", fileName));
+    return;
+  }
+
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    const page = await pdf.getPage(1);
+
+    const viewport = page.getViewport({ scale: big ? 1.2 : 0.7 });
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+
+    await page.render({ canvasContext: ctx, viewport }).promise;
+
+    const wrap = document.createElement("div");
+    wrap.style.width = "100%";
+    wrap.style.height = "100%";
+    wrap.style.display = "flex";
+    wrap.style.flexDirection = "column";
+    wrap.style.alignItems = "center";
+    wrap.style.justifyContent = "center";
+    wrap.style.gap = "8px";
+
+    const label = document.createElement("div");
+    label.className = "pdf-file-label";
+    label.textContent = fileName;
+
+    wrap.appendChild(canvas);
+    wrap.appendChild(label);
+
+    container.appendChild(wrap);
+  } catch (err) {
+    console.error("PDF thumbnail error:", err);
+    container.appendChild(createFallbackPreview("PDF", fileName));
+  }
+}
+
+/* ---------------- MODAL ---------------- */
 function openModal(fileId) {
   const item = uploadedFiles.find(f => f.id === fileId);
   if (!item) return;
@@ -285,7 +393,7 @@ function openModal(fileId) {
   outputWidthInput.value = "";
   outputHeightInput.value = "";
 
-  originalInfo.textContent = `${item.file.name} • ${formatBytes(item.file.size)} • ${item.file.type}`;
+  originalInfo.textContent = `${item.file.name} • ${formatBytes(item.file.size)} • ${item.file.type || getExtension(item.file.name)}`;
 
   setupOutputFormats(item);
 
@@ -346,8 +454,8 @@ function renderModalPreview(item) {
 
   if (item.typeCategory === "image") {
     const img = document.createElement("img");
-    img.src = item.previewUrl;
     img.alt = item.file.name;
+    img.src = item.previewUrl || URL.createObjectURL(item.file);
     img.onerror = () => {
       modalPreview.innerHTML = "";
       modalPreview.appendChild(createFallbackPreview("IMAGE", item.file.name));
@@ -358,51 +466,7 @@ function renderModalPreview(item) {
   }
 }
 
-async function renderPdfThumbnail(file, container, fileName = "PDF File", big = false) {
-  container.innerHTML = "";
-
-  if (!window.pdfjsLib) {
-    container.appendChild(createFallbackPreview("PDF", fileName));
-    return;
-  }
-
-  try {
-    const arrayBuffer = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-    const page = await pdf.getPage(1);
-
-    const viewport = page.getViewport({ scale: big ? 1.2 : 0.7 });
-    const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("2d");
-
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
-
-    await page.render({ canvasContext: ctx, viewport }).promise;
-
-    const wrap = document.createElement("div");
-    wrap.style.width = "100%";
-    wrap.style.height = "100%";
-    wrap.style.display = "flex";
-    wrap.style.flexDirection = "column";
-    wrap.style.alignItems = "center";
-    wrap.style.justifyContent = "center";
-    wrap.style.gap = "8px";
-
-    const label = document.createElement("div");
-    label.className = "pdf-file-label";
-    label.textContent = fileName;
-
-    wrap.appendChild(canvas);
-    wrap.appendChild(label);
-
-    container.appendChild(wrap);
-  } catch (err) {
-    console.error("PDF thumbnail error:", err);
-    container.appendChild(createFallbackPreview("PDF", fileName));
-  }
-}
-
+/* ---------------- FINAL PREVIEW ---------------- */
 async function buildPreview() {
   const item = uploadedFiles.find(f => f.id === activeFileId);
   if (!item) return;
@@ -468,6 +532,7 @@ function renderFinalPreview(originalItem, result) {
   }
 }
 
+/* ---------------- PROCESSORS ---------------- */
 async function processImageFile(file, settings) {
   const { outputFormat, targetBytes, customName, width, height } = settings;
   const img = await loadImageFromFile(file);
@@ -590,61 +655,3 @@ async function processPdfToImage(file, outputFormat, targetBytes, customName = "
 
   if (targetBytes) {
     let attempts = 0;
-    let bestBlob = blob;
-    let bestDiff = Math.abs(blob.size - targetBytes);
-
-    while (attempts < 18) {
-      if (Math.abs(blob.size - targetBytes) <= Math.max(12 * 1024, targetBytes * 0.08)) {
-        bestBlob = blob;
-        break;
-      }
-
-      if (blob.size > targetBytes) {
-        if (outputFormat === "png") {
-          width = Math.max(100, Math.floor(width * 0.92));
-          height = Math.max(100, Math.floor(height * 0.92));
-        } else {
-          quality = Math.max(0.08, quality - 0.06);
-          if (quality <= 0.28) {
-            width = Math.max(100, Math.floor(width * 0.95));
-            height = Math.max(100, Math.floor(height * 0.95));
-          }
-        }
-      } else {
-        if (outputFormat !== "png" && quality < 0.98) {
-          quality = Math.min(0.98, quality + 0.03);
-        }
-      }
-
-      const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(sourceCanvas, 0, 0, width, height);
-
-      blob = await canvasToBlob(canvas, outputFormat, quality);
-
-      const diff = Math.abs(blob.size - targetBytes);
-      if (diff < bestDiff) {
-        bestDiff = diff;
-        bestBlob = blob;
-      }
-
-      attempts++;
-    }
-
-    blob = bestBlob;
-  }
-
-  return {
-    blob,
-    fileName: buildOutputName(customName, file.name, outputFormat === "jpeg" ? "jpg" : outputFormat),
-    previewType: "image",
-    previewUrl: URL.createObjectURL(blob),
-    formatLabel: outputFormat.toUpperCase(),
-    dimensionsText: `${width} × ${height}px (PDF page 1)`
-  };
-}
-
-async function processImageToTarget(file, outputFormat, targetBytes, forcedWidth = null, forcedHeight = null) {
-  const img = await loadImageFromFile
