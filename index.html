@@ -22,7 +22,7 @@
     </header>
 
     <main class="main-grid">
-      <!-- LEFT: UPLOAD PANEL -->
+      <!-- LEFT PANEL -->
       <section class="upload-panel panel">
         <div class="panel-head">
           <h2>Upload Files</h2>
@@ -30,7 +30,6 @@
         </div>
 
         <div class="dropzone" id="dropzone">
-          <!-- IMPORTANT: hidden attribute नहीं, visually-hidden technique -->
           <input
             type="file"
             id="fileInput"
@@ -44,7 +43,7 @@
             <h3>Select or Drop Files</h3>
             <p>Maximum 20 files • Combined upload size up to 10 MB</p>
 
-            <!-- label-for approach = reliable file picker open -->
+            <!-- label-for approach -->
             <label for="fileInput" id="chooseBtn" class="btn primary choose-label">
               Choose Files
             </label>
@@ -67,11 +66,21 @@
         </div>
       </section>
 
-      <!-- RIGHT: FILES PANEL -->
+      <!-- RIGHT PANEL -->
       <section class="files-panel panel">
         <div class="panel-head">
           <h2>Uploaded Files</h2>
           <span class="panel-tag">Preview + Download Settings</span>
+        </div>
+
+        <div id="uploadProgressWrap" class="upload-progress-wrap hidden">
+          <div class="upload-progress-top">
+            <span id="uploadProgressText">Preparing files...</span>
+            <span id="uploadProgressPercent">0%</span>
+          </div>
+          <div class="upload-progress-bar">
+            <div id="uploadProgressFill" class="upload-progress-fill"></div>
+          </div>
         </div>
 
         <div id="emptyState" class="empty-state">
@@ -110,9 +119,7 @@
                 <option value="MB">MB</option>
               </select>
             </div>
-            <small>
-              Output ko is size ke aas-paas lane ki koshish ki jayegi.
-            </small>
+            <small>Output ko is size ke aas-paas lane ki koshish ki jayegi.</small>
           </div>
 
           <div class="field">
