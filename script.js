@@ -51,19 +51,24 @@ let lastPreviewResult = null;
 init();
 
 function init() {
-  // ONLY button opens system file manager
-  chooseBtn.addEventListener("click", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    fileInput.value = "";
-    fileInput.click();
-  });
+  if (!fileInput) {
+    console.error("fileInput not found");
+  }
 
+  // label-for approach file picker open kar dega.
+  // change event yahin handle hoga.
   fileInput.addEventListener("change", (e) => {
     handleSelectedFiles(e.target.files);
   });
 
-  // Dropzone = drag & drop only
+  // extra safety: choose label ke click par input reset
+  if (chooseBtn) {
+    chooseBtn.addEventListener("click", () => {
+      if (fileInput) fileInput.value = "";
+    });
+  }
+
+  // dropzone drag & drop
   dropzone.addEventListener("dragover", (e) => {
     e.preventDefault();
     dropzone.classList.add("dragover");
@@ -126,13 +131,13 @@ function handleSelectedFiles(fileList) {
   }
 
   if (!supported.length) {
-    fileInput.value = "";
+    if (fileInput) fileInput.value = "";
     return;
   }
 
   if (uploadedFiles.length + supported.length > MAX_FILES) {
     alert(`You can upload a maximum of ${MAX_FILES} files.`);
-    fileInput.value = "";
+    if (fileInput) fileInput.value = "";
     return;
   }
 
@@ -141,7 +146,7 @@ function handleSelectedFiles(fileList) {
 
   if (currentTotal + incomingTotal > MAX_TOTAL_SIZE) {
     alert("Total upload size cannot exceed 10 MB.");
-    fileInput.value = "";
+    if (fileInput) fileInput.value = "";
     return;
   }
 
@@ -155,7 +160,7 @@ function handleSelectedFiles(fileList) {
     });
   });
 
-  fileInput.value = "";
+  if (fileInput) fileInput.value = "";
   renderFiles();
 }
 
@@ -230,11 +235,13 @@ function renderFiles() {
     const downloadBtn = document.createElement("button");
     downloadBtn.className = "btn primary";
     downloadBtn.textContent = "Download";
+    downloadBtn.type = "button";
     downloadBtn.addEventListener("click", () => openModal(item.id));
 
     const removeBtn = document.createElement("button");
     removeBtn.className = "btn danger";
     removeBtn.textContent = "Remove";
+    removeBtn.type = "button";
     removeBtn.addEventListener("click", () => removeFile(item.id));
 
     actions.appendChild(downloadBtn);
@@ -391,6 +398,7 @@ async function renderPdfThumbnail(file, container, fileName = "PDF File", big = 
 
     container.appendChild(wrap);
   } catch (err) {
+    console.error("PDF thumbnail error:", err);
     container.appendChild(createFallbackPreview("PDF", fileName));
   }
 }
@@ -639,16 +647,4 @@ async function processPdfToImage(file, outputFormat, targetBytes, customName = "
 }
 
 async function processImageToTarget(file, outputFormat, targetBytes, forcedWidth = null, forcedHeight = null) {
-  const img = await loadImageFromFile(file);
-
-  let width = forcedWidth || img.width;
-  let height = forcedHeight || img.height;
-  let quality = 0.92;
-
-  let blob = await canvasExport(img, width, height, outputFormat, quality);
-
-  if (!targetBytes) return blob;
-
-  let attempts = 0;
-  let bestBlob = blob;
-  let bestDiff = Math.abs(blob.size
+  const img = await loadImageFromFile
