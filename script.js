@@ -11,16 +11,25 @@ const emptyState = document.getElementById("emptyState");
 const fileCountEl = document.getElementById("fileCount");
 const totalSizeEl = document.getElementById("totalSize");
 const clearAllBtn = document.getElementById("clearAllBtn");
+const downloadAllBtn = document.getElementById("downloadAllBtn");
+const downloadZipBtn = document.getElementById("downloadZipBtn");
+const applyAllBtn = document.getElementById("applyAllBtn");
 
 const modalOverlay = document.getElementById("modalOverlay");
 const closeModalBtn = document.getElementById("closeModalBtn");
 const cancelBtn = document.getElementById("cancelBtn");
 const previewBtn = document.getElementById("previewBtn");
+const applyCurrentToAllBtn = document.getElementById("applyCurrentToAllBtn");
 
 const previewOverlay = document.getElementById("previewOverlay");
 const closePreviewOverlayBtn = document.getElementById("closePreviewOverlayBtn");
 const backToEditBtn = document.getElementById("backToEditBtn");
 const finalDownloadBtn = document.getElementById("finalDownloadBtn");
+
+const bulkOverlay = document.getElementById("bulkOverlay");
+const closeBulkOverlayBtn = document.getElementById("closeBulkOverlayBtn");
+const cancelBulkBtn = document.getElementById("cancelBulkBtn");
+const saveBulkBtn = document.getElementById("saveBulkBtn");
 
 const modalTitle = document.getElementById("modalTitle");
 const modalSub = document.getElementById("modalSub");
@@ -44,56 +53,65 @@ const previewSize = document.getElementById("previewSize");
 const previewDimensions = document.getElementById("previewDimensions");
 const previewOriginal = document.getElementById("previewOriginal");
 
+const bulkTargetSize = document.getElementById("bulkTargetSize");
+const bulkSizeUnit = document.getElementById("bulkSizeUnit");
+const bulkOutputFormat = document.getElementById("bulkOutputFormat");
+const bulkOutputWidth = document.getElementById("bulkOutputWidth");
+const bulkOutputHeight = document.getElementById("bulkOutputHeight");
+const bulkNamePrefix = document.getElementById("bulkNamePrefix");
+
 let uploadedFiles = [];
 let activeFileId = null;
 let lastPreviewResult = null;
+let bulkSettings = null;
 
-chooseBtn.addEventListener("click", () => fileInput.click());
-fileInput.addEventListener("change", (e) => handleSelectedFiles(e.target.files));
-
-dropzone.addEventListener("dragover", (e) => {
-  e.preventDefault();
-  dropzone.classList.add("dragover");
-});
-dropzone.addEventListener("dragleave", () => dropzone.classList.remove("dragover"));
-dropzone.addEventListener("drop", (e) => {
-  e.preventDefault();
-  dropzone.classList.remove("dragover");
-  handleSelectedFiles(e.dataTransfer.files);
-});
-
-clearAllBtn.addEventListener("click", () => {
-  uploadedFiles.forEach(f => {
-    if (f.previewUrl) URL.revokeObjectURL(f.previewUrl);
+function init() {
+  // choose files bug fix: multiple reliable triggers
+  chooseBtn.addEventListener("click", openFilePickerSafely);
+  dropzone.addEventListener("click", (e) => {
+    if (e.target.closest(".btn") || e.target.closest("label")) return;
+    openFilePickerSafely();
   });
-  uploadedFiles = [];
-  renderFiles();
-});
+  dropzone.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      openFilePickerSafely();
+    }
+  });
 
-closeModalBtn.addEventListener("click", closeModal);
-cancelBtn.addEventListener("click", closeModal);
+  fileInput.addEventListener("change", (e) => handleSelectedFiles(e.target.files));
 
-modalOverlay.addEventListener("click", (e) => {
-  if (e.target === modalOverlay) closeModal();
-});
+  dropzone.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    dropzone.classList.add("dragover");
+  });
+  dropzone.addEventListener("dragleave", () => dropzone.classList.remove("dragover"));
+  dropzone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    dropzone.classList.remove("dragover");
+    handleSelectedFiles(e.dataTransfer.files);
+  });
 
-previewOverlay.addEventListener("click", (e) => {
-  if (e.target === previewOverlay) closePreviewOverlay();
-});
+  clearAllBtn.addEventListener("click", clearAllFiles);
+  downloadAllBtn.addEventListener("click", downloadAllProcessed);
+  downloadZipBtn.addEventListener("click", downloadAllAsZip);
+  applyAllBtn.addEventListener("click", () => bulkOverlay.classList.remove("hidden"));
 
-closePreviewOverlayBtn.addEventListener("click", closePreviewOverlay);
+  closeModalBtn.addEventListener("click", closeModal);
+  cancelBtn.addEventListener("click", closeModal);
+  previewBtn.addEventListener("click", buildPreview);
+  applyCurrentToAllBtn.addEventListener("click", applyCurrentSettingsToAll);
 
-backToEditBtn.addEventListener("click", () => {
-  closePreviewOverlay();
-  modalOverlay.classList.remove("hidden");
-});
+  modalOverlay.addEventListener("click", (e) => {
+    if (e.target === modalOverlay) closeModal();
+  });
 
-previewBtn.addEventListener("click", async () => {
-  await buildPreview();
-});
-
-finalDownloadBtn.addEventListener("click", async () => {
-  try {
+  closePreviewOverlayBtn.addEventListener("click", closePreviewOverlay);
+  backToEditBtn.addEventListener("click", () => {
+    closePreviewOverlay();
+    modalOverlay.classList.remove("hidden");
+  });
+  finalDownloadBtn.addEventListener("click", () => {
     if (!lastPreviewResult || !lastPreviewResult.blob) {
       alert("Please generate preview first.");
       return;
@@ -101,11 +119,39 @@ finalDownloadBtn.addEventListener("click", async () => {
     triggerDownload(lastPreviewResult.blob, lastPreviewResult.fileName);
     closePreviewOverlay();
     closeModal();
+  });
+
+  previewOverlay.addEventListener("click", (e) => {
+    if (e.target === previewOverlay) closePreviewOverlay();
+  });
+
+  closeBulkOverlayBtn.addEventListener("click", closeBulkModal);
+  cancelBulkBtn.addEventListener("click", closeBulkModal);
+  saveBulkBtn.addEventListener("click", saveBulkSettings);
+  bulkOverlay.addEventListener("click", (e) => {
+    if (e.target === bulkOverlay) closeBulkModal();
+  });
+
+  renderFiles();
+}
+init();
+
+function openFilePickerSafely() {
+  try {
+    fileInput.value = "";
+    fileInput.click();
   } catch (err) {
-    console.error(err);
-    alert("Download failed.");
+    console.error("File picker open failed:", err);
   }
-});
+}
+
+function clearAllFiles() {
+  uploadedFiles.forEach(f => {
+    if (f.previewUrl) URL.revokeObjectURL(f.previewUrl);
+  });
+  uploadedFiles = [];
+  renderFiles();
+}
 
 function handleSelectedFiles(fileList) {
   if (!fileList || !fileList.length) return;
@@ -140,7 +186,8 @@ function handleSelectedFiles(fileList) {
       id,
       file,
       typeCategory,
-      previewUrl: typeCategory === "image" ? URL.createObjectURL(file) : null
+      previewUrl: typeCategory === "image" ? URL.createObjectURL(file) : null,
+      savedSettings: null
     });
   });
 
@@ -151,9 +198,7 @@ function handleSelectedFiles(fileList) {
 function renderFiles() {
   fileGrid.innerHTML = "";
   fileCountEl.textContent = `${uploadedFiles.length} / ${MAX_FILES}`;
-  totalSizeEl.textContent = `${formatBytes(
-    uploadedFiles.reduce((sum, f) => sum + f.file.size, 0)
-  )} / 10 MB`;
+  totalSizeEl.textContent = `${formatBytes(uploadedFiles.reduce((sum, f) => sum + f.file.size, 0))} / 10 MB`;
 
   if (!uploadedFiles.length) {
     emptyState.classList.remove("hidden");
@@ -194,6 +239,10 @@ function renderFiles() {
     fileSize.className = "file-size";
     fileSize.textContent = `${formatBytes(item.file.size)} • ${item.file.type || "unknown"}`;
 
+    const extra = document.createElement("div");
+    extra.className = "file-extra";
+    extra.textContent = item.savedSettings ? "Custom settings saved" : "No saved custom settings";
+
     const actions = document.createElement("div");
     actions.className = "file-actions";
 
@@ -202,21 +251,36 @@ function renderFiles() {
     openBtn.textContent = "Download";
     openBtn.addEventListener("click", () => openModal(item.id));
 
+    const quickBtn = document.createElement("button");
+    quickBtn.className = "btn ghost";
+    quickBtn.textContent = "Quick";
+    quickBtn.addEventListener("click", async () => {
+      try {
+        const settings = getEffectiveSettings(item);
+        const result = await processItem(item, settings);
+        triggerDownload(result.blob, result.fileName);
+      } catch (e) {
+        console.error(e);
+        alert("Quick download failed.");
+      }
+    });
+
     const removeBtn = document.createElement("button");
     removeBtn.className = "btn danger";
     removeBtn.textContent = "Remove";
     removeBtn.addEventListener("click", () => removeFile(item.id));
 
     actions.appendChild(openBtn);
+    actions.appendChild(quickBtn);
     actions.appendChild(removeBtn);
 
     meta.appendChild(fileName);
     meta.appendChild(fileSize);
+    meta.appendChild(extra);
     meta.appendChild(actions);
 
     card.appendChild(previewBox);
     card.appendChild(meta);
-
     fileGrid.appendChild(card);
   });
 }
@@ -237,11 +301,14 @@ function openModal(fileId) {
 
   modalTitle.textContent = "Download Settings";
   modalSub.textContent = item.file.name;
-  outputNameInput.value = "";
-  targetSizeInput.value = "";
-  sizeUnitSelect.value = "KB";
-  outputWidthInput.value = "";
-  outputHeightInput.value = "";
+
+  const defaults = getEffectiveSettings(item);
+
+  targetSizeInput.value = defaults.targetValue ?? "";
+  sizeUnitSelect.value = defaults.sizeUnit || "KB";
+  outputNameInput.value = defaults.customName || "";
+  outputWidthInput.value = defaults.width || "";
+  outputHeightInput.value = defaults.height || "";
 
   originalInfo.textContent = `${item.file.name} • ${formatBytes(item.file.size)} • ${item.file.type}`;
 
@@ -254,6 +321,7 @@ function openModal(fileId) {
   }
 
   setupOutputFormats(item);
+  outputFormatSelect.value = defaults.outputFormat || getDefaultOutputFormat(item);
   renderModalPreview(item);
 
   modalOverlay.classList.remove("hidden");
@@ -270,6 +338,19 @@ function closePreviewOverlay() {
   resultPreviewVisual.innerHTML = "";
 }
 
+function closeBulkModal() {
+  bulkOverlay.classList.add("hidden");
+}
+
+function getDefaultOutputFormat(item) {
+  if (item.typeCategory === "image") {
+    if (item.file.type === "image/png") return "png";
+    if (item.file.type === "image/webp") return "webp";
+    return "jpeg";
+  }
+  return "pdf";
+}
+
 function setupOutputFormats(item) {
   outputFormatSelect.innerHTML = "";
 
@@ -280,17 +361,12 @@ function setupOutputFormats(item) {
       { value: "webp", label: "WEBP" },
       { value: "pdf", label: "PDF" }
     ];
-
     formats.forEach((f) => {
       const opt = document.createElement("option");
       opt.value = f.value;
       opt.textContent = f.label;
       outputFormatSelect.appendChild(opt);
     });
-
-    if (item.file.type === "image/png") outputFormatSelect.value = "png";
-    else if (item.file.type === "image/webp") outputFormatSelect.value = "webp";
-    else outputFormatSelect.value = "jpeg";
   } else {
     const formats = [
       { value: "pdf", label: "PDF" },
@@ -298,21 +374,17 @@ function setupOutputFormats(item) {
       { value: "png", label: "PNG" },
       { value: "webp", label: "WEBP" }
     ];
-
     formats.forEach((f) => {
       const opt = document.createElement("option");
       opt.value = f.value;
       opt.textContent = f.label;
       outputFormatSelect.appendChild(opt);
     });
-
-    outputFormatSelect.value = "pdf";
   }
 }
 
 function renderModalPreview(item) {
   modalPreview.innerHTML = "";
-
   if (item.typeCategory === "image") {
     const img = document.createElement("img");
     img.src = item.previewUrl;
@@ -387,30 +459,8 @@ async function buildPreview() {
     previewBtn.disabled = true;
     previewBtn.textContent = "Preparing...";
 
-    const customName = outputNameInput.value.trim();
-    const targetValue = parseFloat(targetSizeInput.value);
-    const targetBytes = !isNaN(targetValue) ? convertToBytes(targetValue, sizeUnitSelect.value) : null;
-    const outputFormat = outputFormatSelect.value;
-    const width = parsePositiveInt(outputWidthInput.value);
-    const height = parsePositiveInt(outputHeightInput.value);
-
-    let result;
-
-    if (item.typeCategory === "image") {
-      result = await processImageFile(item.file, {
-        outputFormat,
-        targetBytes,
-        width,
-        height,
-        customName
-      });
-    } else {
-      result = await processPdfFile(item.file, {
-        outputFormat,
-        targetBytes,
-        customName
-      });
-    }
+    const settings = collectSettingsFromModal(item);
+    const result = await processItem(item, settings);
 
     lastPreviewResult = result;
     renderFinalPreview(item, result);
@@ -451,194 +501,96 @@ function renderFinalPreview(originalItem, result) {
   }
 }
 
-async function processImageFile(file, options) {
-  const { outputFormat, targetBytes, width, height, customName } = options;
-  const img = await loadImageFromFile(file);
+function collectSettingsFromModal(item) {
+  const targetValue = parseFloat(targetSizeInput.value);
+  return {
+    outputFormat: outputFormatSelect.value,
+    targetValue: !isNaN(targetValue) ? targetValue : null,
+    sizeUnit: sizeUnitSelect.value,
+    targetBytes: !isNaN(targetValue) ? convertToBytes(targetValue, sizeUnitSelect.value) : null,
+    customName: outputNameInput.value.trim(),
+    width: item.typeCategory === "image" ? parsePositiveInt(outputWidthInput.value) : null,
+    height: item.typeCategory === "image" ? parsePositiveInt(outputHeightInput.value) : null
+  };
+}
 
+function applyCurrentSettingsToAll() {
+  const item = uploadedFiles.find((f) => f.id === activeFileId);
+  if (!item) return;
+
+  const settings = collectSettingsFromModal(item);
+  bulkSettings = {
+    targetValue: settings.targetValue,
+    sizeUnit: settings.sizeUnit,
+    outputFormat: settings.outputFormat,
+    width: settings.width,
+    height: settings.height,
+    customNamePrefix: settings.customName || ""
+  };
+
+  alert("Current settings saved as bulk settings for all files.");
+}
+
+function saveBulkSettings() {
+  const targetValue = parseFloat(bulkTargetSize.value);
+  bulkSettings = {
+    targetValue: !isNaN(targetValue) ? targetValue : null,
+    sizeUnit: bulkSizeUnit.value,
+    outputFormat: bulkOutputFormat.value || null,
+    width: parsePositiveInt(bulkOutputWidth.value),
+    height: parsePositiveInt(bulkOutputHeight.value),
+    customNamePrefix: bulkNamePrefix.value.trim()
+  };
+  closeBulkModal();
+  alert("Bulk settings saved.");
+}
+
+function getEffectiveSettings(item) {
+  const itemSaved = item.savedSettings || {};
+  const bulk = bulkSettings || {};
+
+  const outputFormat = itemSaved.outputFormat || bulk.outputFormat || getDefaultOutputFormat(item);
+
+  return {
+    outputFormat,
+    targetValue: itemSaved.targetValue ?? bulk.targetValue ?? null,
+    sizeUnit: itemSaved.sizeUnit || bulk.sizeUnit || "KB",
+    targetBytes:
+      (itemSaved.targetValue ?? bulk.targetValue) != null
+        ? convertToBytes(
+            itemSaved.targetValue ?? bulk.targetValue,
+            itemSaved.sizeUnit || bulk.sizeUnit || "KB"
+          )
+        : null,
+    customName: itemSaved.customName || "",
+    width: itemSaved.width ?? bulk.width ?? null,
+    height: itemSaved.height ?? bulk.height ?? null,
+    bulkPrefix: bulk.customNamePrefix || ""
+  };
+}
+
+async function processItem(item, settings) {
+  if (item.typeCategory === "image") {
+    return await processImageFile(item.file, settings, settings.bulkPrefix);
+  } else {
+    return await processPdfFile(item.file, settings, settings.bulkPrefix);
+  }
+}
+
+async function processImageFile(file, settings, bulkPrefix = "") {
+  const { outputFormat, targetBytes, width, height, customName } = settings;
+  const img = await loadImageFromFile(file);
   const finalDimensions = calculateOutputDimensions(img.width, img.height, width, height);
+
+  let finalNameBase = customName || "";
+  if (!finalNameBase && bulkPrefix) finalNameBase = `${bulkPrefix}-${stripExt(file.name)}`;
 
   if (outputFormat === "pdf") {
     const blob = await imageToPdfBlob(img, finalDimensions.width, finalDimensions.height, targetBytes);
-    const fileName = buildOutputName(customName, file.name, "pdf");
-
+    const fileName = buildOutputName(finalNameBase, file.name, "pdf");
     return {
       blob,
       fileName,
       previewType: "pdf",
       formatLabel: "PDF",
-      dimensionsText: `${finalDimensions.width} × ${finalDimensions.height}px`
-    };
-  }
-
-  const resultBlob = await processImageToTarget(file, outputFormat, targetBytes, finalDimensions.width, finalDimensions.height);
-  const fileName = buildOutputName(customName, file.name, outputFormat);
-  const previewUrl = URL.createObjectURL(resultBlob);
-
-  return {
-    blob: resultBlob,
-    fileName,
-    previewType: "image",
-    previewUrl,
-    formatLabel: outputFormat.toUpperCase(),
-    dimensionsText: `${finalDimensions.width} × ${finalDimensions.height}px`
-  };
-}
-
-async function processPdfFile(file, options) {
-  const { outputFormat, targetBytes, customName } = options;
-
-  if (outputFormat === "pdf") {
-    return await processPdfToPdf(file, targetBytes, customName);
-  } else {
-    return await processPdfToImage(file, outputFormat, targetBytes, customName);
-  }
-}
-
-async function processPdfToPdf(file, targetBytes, customName = "") {
-  if (!window.pdfjsLib || !window.jspdf) {
-    return {
-      blob: file,
-      fileName: buildOutputName(customName, file.name, "pdf"),
-      previewType: "pdf",
-      formatLabel: "PDF",
-      dimensionsText: "-"
-    };
-  }
-
-  const { jsPDF } = window.jspdf;
-  const arrayBuffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-  const pageCount = pdf.numPages;
-
-  const doc = new jsPDF({ unit: "pt", format: "a4", compress: true });
-
-  for (let i = 1; i <= pageCount; i++) {
-    const page = await pdf.getPage(i);
-    const baseScale = targetBytes ? 1.0 : 1.3;
-    const viewport = page.getViewport({ scale: baseScale });
-
-    const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("2d");
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
-
-    await page.render({ canvasContext: ctx, viewport }).promise;
-
-    let quality = 0.82;
-    if (targetBytes) {
-      if (targetBytes < 300 * 1024) quality = 0.42;
-      else if (targetBytes < 700 * 1024) quality = 0.58;
-      else quality = 0.72;
-    }
-
-    const imgData = canvas.toDataURL("image/jpeg", quality);
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
-
-    if (i > 1) doc.addPage();
-    doc.addImage(imgData, "JPEG", 0, 0, pageWidth, pageHeight);
-  }
-
-  const blob = doc.output("blob");
-  const fileName = buildOutputName(customName, file.name, "pdf");
-
-  return {
-    blob,
-    fileName,
-    previewType: "pdf",
-    formatLabel: "PDF",
-    dimensionsText: `${pageCount} page(s)`
-  };
-}
-
-async function processPdfToImage(file, outputFormat, targetBytes, customName = "") {
-  if (!window.pdfjsLib) throw new Error("PDF library not loaded");
-
-  const arrayBuffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-  const page = await pdf.getPage(1);
-
-  const viewport = page.getViewport({ scale: 2 });
-  const canvas = document.createElement("canvas");
-  const ctx = canvas.getContext("2d");
-  canvas.width = viewport.width;
-  canvas.height = viewport.height;
-
-  await page.render({ canvasContext: ctx, viewport }).promise;
-
-  let quality = 0.92;
-  let width = canvas.width;
-  let height = canvas.height;
-
-  let blob = await canvasToBlob(canvas, outputFormat, quality);
-
-  if (targetBytes) {
-    let attempts = 0;
-    let bestBlob = blob;
-    let bestDiff = Math.abs(blob.size - targetBytes);
-
-    while (attempts < 18) {
-      const diff = blob.size - targetBytes;
-      const tolerance = Math.max(12 * 1024, targetBytes * 0.08);
-
-      if (Math.abs(diff) <= tolerance) {
-        bestBlob = blob;
-        break;
-      }
-
-      if (blob.size > targetBytes) {
-        if (outputFormat === "png") {
-          width = Math.max(100, Math.floor(width * 0.92));
-          height = Math.max(100, Math.floor(height * 0.92));
-        } else {
-          quality = Math.max(0.08, quality - 0.06);
-          if (quality <= 0.28) {
-            width = Math.max(100, Math.floor(width * 0.95));
-            height = Math.max(100, Math.floor(height * 0.95));
-          }
-        }
-      } else {
-        if (outputFormat !== "png" && quality < 0.98) {
-          quality = Math.min(0.98, quality + 0.03);
-        }
-      }
-
-      const resizedCanvas = document.createElement("canvas");
-      resizedCanvas.width = width;
-      resizedCanvas.height = height;
-      const rctx = resizedCanvas.getContext("2d");
-      rctx.drawImage(canvas, 0, 0, width, height);
-
-      blob = await canvasToBlob(resizedCanvas, outputFormat, quality);
-
-      const currentDiff = Math.abs(blob.size - targetBytes);
-      if (currentDiff < bestDiff) {
-        bestDiff = currentDiff;
-        bestBlob = blob;
-      }
-
-      attempts++;
-    }
-
-    blob = bestBlob;
-  }
-
-  const ext = outputFormat === "jpeg" ? "jpg" : outputFormat;
-  const fileName = buildOutputName(customName, file.name, ext);
-  const previewUrl = URL.createObjectURL(blob);
-
-  return {
-    blob,
-    fileName,
-    previewType: "image",
-    previewUrl,
-    formatLabel: outputFormat.toUpperCase(),
-    dimensionsText: `${width} × ${height}px (PDF page 1)`
-  };
-}
-
-async function processImageToTarget(file, outputFormat, targetBytes, forcedWidth = null, forcedHeight = null) {
-  const img = await loadImageFromFile(file);
-
-  let width = forcedWidth || img.width;
-  let height =
+      dimensionsText: `${finalDimensions.width} × ${finalDimensions.heigh
