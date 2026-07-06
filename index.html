@@ -13,13 +13,16 @@
         <div class="brand-logo">⌘</div>
         <div>
           <h1>Multi File Compressor + Converter</h1>
-          <p class="subtitle">Upload up to 20 files • Total max 10 MB • Hacking Green UI</p>
+          <p class="subtitle">
+            Upload up to 20 files • Total max 10 MB • Image ↔ PDF tools • Hacking Green UI
+          </p>
         </div>
       </div>
       <div class="status-badge">CLIENT SIDE ONLY</div>
     </header>
 
     <main class="main-grid">
+      <!-- LEFT: UPLOAD PANEL -->
       <section class="upload-panel panel">
         <div class="panel-head">
           <h2>Upload Files</h2>
@@ -58,6 +61,7 @@
         </div>
       </section>
 
+      <!-- RIGHT: FILES PANEL -->
       <section class="files-panel panel">
         <div class="panel-head">
           <h2>Uploaded Files</h2>
@@ -92,7 +96,7 @@
 
         <div class="settings-grid">
           <div class="field">
-            <label for="targetSize">Target Size</label>
+            <label for="targetSize">Target Size (optional)</label>
             <div class="input-row">
               <input type="number" id="targetSize" min="1" placeholder="e.g. 200" />
               <select id="sizeUnit">
@@ -100,6 +104,9 @@
                 <option value="MB">MB</option>
               </select>
             </div>
+            <small>
+              Image/PDF output ko is size ke aas-paas lane ki koshish ki jayegi.
+            </small>
           </div>
 
           <div class="field">
@@ -108,7 +115,7 @@
           </div>
 
           <div class="field" id="dimensionFieldWrap">
-            <label>Dimensions (optional)</label>
+            <label>Width / Height (images only, optional)</label>
             <div class="dimension-row">
               <input type="number" id="outputWidth" min="1" placeholder="Width" />
               <input type="number" id="outputHeight" min="1" placeholder="Height" />
@@ -186,6 +193,7 @@
     </div>
   </div>
 
+  <!-- PDF.js -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script>
     if (window["pdfjsLib"]) {
@@ -194,7 +202,9 @@
     }
   </script>
 
+  <!-- jsPDF -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
   <script src="script.js"></script>
 </body>
 </html>
