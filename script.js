@@ -1,5 +1,5 @@
 const MAX_FILES = 20;
-const MAX_TOTAL_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_TOTAL_SIZE = 10 * 1024 * 1024; // 10 MB
 
 const fileInput = document.getElementById("fileInput");
 const chooseBtn = document.getElementById("chooseBtn");
@@ -9,6 +9,11 @@ const emptyState = document.getElementById("emptyState");
 const fileCountEl = document.getElementById("fileCount");
 const totalSizeEl = document.getElementById("totalSize");
 const clearAllBtn = document.getElementById("clearAllBtn");
+
+const uploadProgressWrap = document.getElementById("uploadProgressWrap");
+const uploadProgressFill = document.getElementById("uploadProgressFill");
+const uploadProgressText = document.getElementById("uploadProgressText");
+const uploadProgressPercent = document.getElementById("uploadProgressPercent");
 
 const modalOverlay = document.getElementById("modalOverlay");
 const closeModalBtn = document.getElementById("closeModalBtn");
@@ -48,28 +53,27 @@ let lastPreviewResult = null;
 
 init();
 
-/* ---------------- INIT ---------------- */
+/* =========================
+   INIT
+========================= */
 function init() {
   if (!fileInput) {
-    console.error("fileInput not found");
     alert("fileInput not found in HTML.");
+    console.error("fileInput missing");
     return;
   }
 
-  // file select
-  fileInput.addEventListener("change", (e) => {
+  fileInput.addEventListener("change", async (e) => {
     const files = e.target.files;
-    handleSelectedFiles(files);
+    await handleSelectedFiles(files);
   });
 
-  // label click -> reset value so same file bhi dubara select ho sake
   if (chooseBtn) {
     chooseBtn.addEventListener("click", () => {
       fileInput.value = "";
     });
   }
 
-  // drag drop
   if (dropzone) {
     dropzone.addEventListener("dragover", (e) => {
       e.preventDefault();
@@ -80,10 +84,10 @@ function init() {
       dropzone.classList.remove("dragover");
     });
 
-    dropzone.addEventListener("drop", (e) => {
+    dropzone.addEventListener("drop", async (e) => {
       e.preventDefault();
       dropzone.classList.remove("dragover");
-      handleSelectedFiles(e.dataTransfer.files);
+      await handleSelectedFiles(e.dataTransfer.files);
     });
   }
 
@@ -100,7 +104,9 @@ function init() {
 
   if (previewBtn) previewBtn.addEventListener("click", buildPreview);
 
-  if (closePreviewOverlayBtn) closePreviewOverlayBtn.addEventListener("click", closePreviewOverlay);
+  if (closePreviewOverlayBtn) {
+    closePreviewOverlayBtn.addEventListener("click", closePreviewOverlay);
+  }
 
   if (backToEditBtn) {
     backToEditBtn.addEventListener("click", () => {
@@ -130,7 +136,9 @@ function init() {
   renderFiles();
 }
 
-/* ---------------- FILE TYPE HELPERS ---------------- */
+/* =========================
+   FILE TYPE HELPERS
+========================= */
 function getExtension(name = "") {
   const parts = name.toLowerCase().split(".");
   return parts.length > 1 ? parts.pop() : "";
@@ -140,11 +148,7 @@ function isImageFile(file) {
   if (!file) return false;
   const type = (file.type || "").toLowerCase();
   const ext = getExtension(file.name);
-
-  return (
-    type.startsWith("image/") ||
-    ["jpg", "jpeg", "png", "webp"].includes(ext)
-  );
+  return type.startsWith("image/") || ["jpg", "jpeg", "png", "webp"].includes(ext);
 }
 
 function isPdfFile(file) {
@@ -154,12 +158,39 @@ function isPdfFile(file) {
   return type === "application/pdf" || ext === "pdf";
 }
 
-/* ---------------- FILE HANDLING ---------------- */
-function handleSelectedFiles(fileList) {
+/* =========================
+   UPLOAD PROGRESS UI
+========================= */
+function showUploadProgress() {
+  if (!uploadProgressWrap) return;
+  uploadProgressWrap.classList.remove("hidden");
+  setUploadProgress(0, "Preparing files...");
+}
+
+function hideUploadProgress(delay = 500) {
+  if (!uploadProgressWrap) return;
+  setTimeout(() => {
+    uploadProgressWrap.classList.add("hidden");
+    if (uploadProgressFill) uploadProgressFill.style.width = "0%";
+    if (uploadProgressText) uploadProgressText.textContent = "Preparing files...";
+    if (uploadProgressPercent) uploadProgressPercent.textContent = "0%";
+  }, delay);
+}
+
+function setUploadProgress(percent, text = "Uploading...") {
+  const safe = Math.max(0, Math.min(100, Math.round(percent)));
+  if (uploadProgressFill) uploadProgressFill.style.width = `${safe}%`;
+  if (uploadProgressPercent) uploadProgressPercent.textContent = `${safe}%`;
+  if (uploadProgressText) uploadProgressText.textContent = text;
+}
+
+/* =========================
+   FILE HANDLING
+========================= */
+async function handleSelectedFiles(fileList) {
   if (!fileList || !fileList.length) return;
 
   const incoming = Array.from(fileList);
-
   const supported = incoming.filter(file => isImageFile(file) || isPdfFile(file));
 
   if (!supported.length) {
@@ -187,46 +218,70 @@ function handleSelectedFiles(fileList) {
     return;
   }
 
-  supported.forEach(file => {
-    const image = isImageFile(file);
-    uploadedFiles.push({
+  showUploadProgress();
+
+  const newItems = [];
+
+  for (let i = 0; i < supported.length; i++) {
+    const file = supported[i];
+    const typeCategory = isImageFile(file) ? "image" : "pdf";
+
+    const item = {
       id: createId(),
       file,
-      typeCategory: image ? "image" : "pdf",
-      previewUrl: image ? URL.createObjectURL(file) : null
-    });
-  });
+      typeCategory,
+      previewUrl: null,
+      pdfThumbDataUrl: null
+    };
 
+    setUploadProgress(
+      ((i + 0.2) / supported.length) * 100,
+      `Processing ${i + 1} of ${supported.length}: ${file.name}`
+    );
+
+    if (typeCategory === "image") {
+      try {
+        item.previewUrl = await readFileAsDataURL(file);
+      } catch (err) {
+        console.error("Image preview create failed:", err);
+        item.previewUrl = null;
+      }
+    } else {
+      try {
+        item.pdfThumbDataUrl = await generatePdfThumbDataUrl(file);
+      } catch (err) {
+        console.error("PDF thumb failed:", err);
+        item.pdfThumbDataUrl = null;
+      }
+    }
+
+    newItems.push(item);
+
+    setUploadProgress(
+      ((i + 1) / supported.length) * 100,
+      `Loaded ${i + 1} of ${supported.length}`
+    );
+  }
+
+  uploadedFiles.push(...newItems);
   fileInput.value = "";
+
   renderFiles();
+  hideUploadProgress(700);
 }
 
-function clearAllFiles() {
-  uploadedFiles.forEach(item => {
-    if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
-  });
-  uploadedFiles = [];
-  renderFiles();
-}
-
-function removeFile(id) {
-  const item = uploadedFiles.find(x => x.id === id);
-  if (item?.previewUrl) URL.revokeObjectURL(item.previewUrl);
-  uploadedFiles = uploadedFiles.filter(x => x.id !== id);
-  renderFiles();
-}
-
-/* ---------------- MAIN GRID RENDER ---------------- */
+/* =========================
+   FILE LIST RENDER
+========================= */
 function renderFiles() {
   if (!fileGrid) return;
 
   fileGrid.innerHTML = "";
 
+  const total = uploadedFiles.reduce((sum, item) => sum + item.file.size, 0);
+
   if (fileCountEl) fileCountEl.textContent = `${uploadedFiles.length} / ${MAX_FILES}`;
-  if (totalSizeEl) {
-    const total = uploadedFiles.reduce((sum, item) => sum + item.file.size, 0);
-    totalSizeEl.textContent = `${formatBytes(total)} / 10 MB`;
-  }
+  if (totalSizeEl) totalSizeEl.textContent = `${formatBytes(total)} / 10 MB`;
 
   if (!uploadedFiles.length) {
     if (emptyState) emptyState.classList.remove("hidden");
@@ -248,29 +303,33 @@ function renderFiles() {
     previewBox.appendChild(badge);
 
     if (item.typeCategory === "image") {
-      const img = document.createElement("img");
-      img.alt = item.file.name;
-
       if (item.previewUrl) {
+        const img = document.createElement("img");
         img.src = item.previewUrl;
+        img.alt = item.file.name;
+        img.onerror = () => {
+          previewBox.innerHTML = "";
+          previewBox.appendChild(badge);
+          previewBox.appendChild(createFallbackPreview("IMAGE", item.file.name));
+        };
+        previewBox.appendChild(img);
       } else {
-        item.previewUrl = URL.createObjectURL(item.file);
-        img.src = item.previewUrl;
-      }
-
-      img.onload = () => {
-        // image ok
-      };
-
-      img.onerror = () => {
-        previewBox.innerHTML = "";
-        previewBox.appendChild(badge);
         previewBox.appendChild(createFallbackPreview("IMAGE", item.file.name));
-      };
-
-      previewBox.appendChild(img);
+      }
     } else {
-      renderPdfThumbnail(item.file, previewBox, item.file.name, false);
+      if (item.pdfThumbDataUrl) {
+        const img = document.createElement("img");
+        img.src = item.pdfThumbDataUrl;
+        img.alt = item.file.name;
+        img.onerror = () => {
+          previewBox.innerHTML = "";
+          previewBox.appendChild(badge);
+          previewBox.appendChild(createFallbackPreview("PDF", item.file.name));
+        };
+        previewBox.appendChild(img);
+      } else {
+        previewBox.appendChild(createFallbackPreview("PDF", item.file.name));
+      }
     }
 
     const meta = document.createElement("div");
@@ -313,7 +372,22 @@ function renderFiles() {
   });
 }
 
-/* ---------------- PREVIEW HELPERS ---------------- */
+/* =========================
+   REMOVE / CLEAR
+========================= */
+function clearAllFiles() {
+  uploadedFiles = [];
+  renderFiles();
+}
+
+function removeFile(id) {
+  uploadedFiles = uploadedFiles.filter(item => item.id !== id);
+  renderFiles();
+}
+
+/* =========================
+   FALLBACK PREVIEW
+========================= */
 function createFallbackPreview(type, fileName) {
   const wrap = document.createElement("div");
   wrap.className = "pdf-placeholder";
@@ -325,58 +399,9 @@ function createFallbackPreview(type, fileName) {
   return wrap;
 }
 
-async function renderPdfThumbnail(file, container, fileName = "PDF File", big = false) {
-  container.innerHTML = "";
-
-  // badge wapas add
-  const badge = document.createElement("div");
-  badge.className = "file-type-badge";
-  badge.textContent = "PDF";
-  container.appendChild(badge);
-
-  if (!window.pdfjsLib) {
-    container.appendChild(createFallbackPreview("PDF", fileName));
-    return;
-  }
-
-  try {
-    const arrayBuffer = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-    const page = await pdf.getPage(1);
-
-    const viewport = page.getViewport({ scale: big ? 1.2 : 0.7 });
-    const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("2d");
-
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
-
-    await page.render({ canvasContext: ctx, viewport }).promise;
-
-    const wrap = document.createElement("div");
-    wrap.style.width = "100%";
-    wrap.style.height = "100%";
-    wrap.style.display = "flex";
-    wrap.style.flexDirection = "column";
-    wrap.style.alignItems = "center";
-    wrap.style.justifyContent = "center";
-    wrap.style.gap = "8px";
-
-    const label = document.createElement("div");
-    label.className = "pdf-file-label";
-    label.textContent = fileName;
-
-    wrap.appendChild(canvas);
-    wrap.appendChild(label);
-
-    container.appendChild(wrap);
-  } catch (err) {
-    console.error("PDF thumbnail error:", err);
-    container.appendChild(createFallbackPreview("PDF", fileName));
-  }
-}
-
-/* ---------------- MODAL ---------------- */
+/* =========================
+   MODAL
+========================= */
 function openModal(fileId) {
   const item = uploadedFiles.find(f => f.id === fileId);
   if (!item) return;
@@ -412,13 +437,13 @@ function openModal(fileId) {
 
 function closeModal() {
   modalOverlay.classList.add("hidden");
-  modalPreview.innerHTML = "";
+  if (modalPreview) modalPreview.innerHTML = "";
   activeFileId = null;
 }
 
 function closePreviewOverlay() {
   previewOverlay.classList.add("hidden");
-  resultPreviewVisual.innerHTML = "";
+  if (resultPreviewVisual) resultPreviewVisual.innerHTML = "";
 }
 
 function setupOutputFormats(item) {
@@ -453,20 +478,37 @@ function renderModalPreview(item) {
   modalPreview.innerHTML = "";
 
   if (item.typeCategory === "image") {
-    const img = document.createElement("img");
-    img.alt = item.file.name;
-    img.src = item.previewUrl || URL.createObjectURL(item.file);
-    img.onerror = () => {
-      modalPreview.innerHTML = "";
+    if (item.previewUrl) {
+      const img = document.createElement("img");
+      img.src = item.previewUrl;
+      img.alt = item.file.name;
+      img.onerror = () => {
+        modalPreview.innerHTML = "";
+        modalPreview.appendChild(createFallbackPreview("IMAGE", item.file.name));
+      };
+      modalPreview.appendChild(img);
+    } else {
       modalPreview.appendChild(createFallbackPreview("IMAGE", item.file.name));
-    };
-    modalPreview.appendChild(img);
+    }
   } else {
-    renderPdfThumbnail(item.file, modalPreview, item.file.name, true);
+    if (item.pdfThumbDataUrl) {
+      const img = document.createElement("img");
+      img.src = item.pdfThumbDataUrl;
+      img.alt = item.file.name;
+      img.onerror = () => {
+        modalPreview.innerHTML = "";
+        modalPreview.appendChild(createFallbackPreview("PDF", item.file.name));
+      };
+      modalPreview.appendChild(img);
+    } else {
+      modalPreview.appendChild(createFallbackPreview("PDF", item.file.name));
+    }
   }
 }
 
-/* ---------------- FINAL PREVIEW ---------------- */
+/* =========================
+   FINAL PREVIEW + DOWNLOAD
+========================= */
 async function buildPreview() {
   const item = uploadedFiles.find(f => f.id === activeFileId);
   if (!item) return;
@@ -532,7 +574,9 @@ function renderFinalPreview(originalItem, result) {
   }
 }
 
-/* ---------------- PROCESSORS ---------------- */
+/* =========================
+   IMAGE / PDF PROCESSING
+========================= */
 async function processImageFile(file, settings) {
   const { outputFormat, targetBytes, customName, width, height } = settings;
   const img = await loadImageFromFile(file);
@@ -607,51 +651,4 @@ async function processPdfToPdf(file, targetBytes, customName = "") {
     await page.render({ canvasContext: ctx, viewport }).promise;
 
     let quality = 0.82;
-    if (targetBytes) {
-      if (targetBytes < 300 * 1024) quality = 0.42;
-      else if (targetBytes < 700 * 1024) quality = 0.58;
-      else quality = 0.72;
-    }
-
-    const imgData = canvas.toDataURL("image/jpeg", quality);
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
-
-    if (i > 1) doc.addPage();
-    doc.addImage(imgData, "JPEG", 0, 0, pageWidth, pageHeight);
-  }
-
-  return {
-    blob: doc.output("blob"),
-    fileName: buildOutputName(customName, file.name, "pdf"),
-    previewType: "pdf",
-    formatLabel: "PDF",
-    dimensionsText: `${pageCount} page(s)`
-  };
-}
-
-async function processPdfToImage(file, outputFormat, targetBytes, customName = "") {
-  if (!window.pdfjsLib) throw new Error("PDF library not loaded");
-
-  const arrayBuffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-  const page = await pdf.getPage(1);
-
-  let width, height;
-  let quality = 0.92;
-
-  const viewport = page.getViewport({ scale: 2 });
-  const sourceCanvas = document.createElement("canvas");
-  const sourceCtx = sourceCanvas.getContext("2d");
-  sourceCanvas.width = viewport.width;
-  sourceCanvas.height = viewport.height;
-
-  await page.render({ canvasContext: sourceCtx, viewport }).promise;
-
-  width = sourceCanvas.width;
-  height = sourceCanvas.height;
-
-  let blob = await canvasToBlob(sourceCanvas, outputFormat, quality);
-
-  if (targetBytes) {
-    let attempts = 0;
+    if (t
