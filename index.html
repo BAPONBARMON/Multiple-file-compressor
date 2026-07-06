@@ -30,18 +30,24 @@
         </div>
 
         <div class="dropzone" id="dropzone">
+          <!-- IMPORTANT: hidden attribute नहीं, visually-hidden technique -->
           <input
             type="file"
             id="fileInput"
             multiple
             accept=".jpg,.jpeg,.png,.webp,.pdf"
-            hidden
+            class="visually-hidden-input"
           />
+
           <div class="dropzone-inner">
             <div class="drop-icon">⬆</div>
             <h3>Select or Drop Files</h3>
             <p>Maximum 20 files • Combined upload size up to 10 MB</p>
-            <button type="button" id="chooseBtn" class="btn primary">Choose Files</button>
+
+            <!-- label-for approach = reliable file picker open -->
+            <label for="fileInput" id="chooseBtn" class="btn primary choose-label">
+              Choose Files
+            </label>
           </div>
         </div>
 
@@ -57,7 +63,7 @@
         </div>
 
         <div class="toolbar">
-          <button class="btn ghost" id="clearAllBtn">Clear All</button>
+          <button class="btn ghost" id="clearAllBtn" type="button">Clear All</button>
         </div>
       </section>
 
@@ -86,7 +92,7 @@
           <h3 id="modalTitle">Download Settings</h3>
           <p id="modalSub">Configure output size, format and file name</p>
         </div>
-        <button class="icon-btn" id="closeModalBtn">✕</button>
+        <button class="icon-btn" id="closeModalBtn" type="button">✕</button>
       </div>
 
       <div class="modal-body">
@@ -105,7 +111,7 @@
               </select>
             </div>
             <small>
-              Image/PDF output ko is size ke aas-paas lane ki koshish ki jayegi.
+              Output ko is size ke aas-paas lane ki koshish ki jayegi.
             </small>
           </div>
 
@@ -140,8 +146,8 @@
       </div>
 
       <div class="modal-footer">
-        <button class="btn ghost" id="cancelBtn">Cancel</button>
-        <button class="btn primary" id="previewBtn">Preview</button>
+        <button class="btn ghost" id="cancelBtn" type="button">Cancel</button>
+        <button class="btn primary" id="previewBtn" type="button">Preview</button>
       </div>
     </div>
   </div>
@@ -154,7 +160,7 @@
           <h3>Final Output Preview</h3>
           <p>Preview ke hisaab se hi final file download hogi</p>
         </div>
-        <button class="icon-btn" id="closePreviewOverlayBtn">✕</button>
+        <button class="icon-btn" id="closePreviewOverlayBtn" type="button">✕</button>
       </div>
 
       <div class="preview-final-body">
@@ -187,8 +193,8 @@
       </div>
 
       <div class="modal-footer">
-        <button class="btn ghost" id="backToEditBtn">Back</button>
-        <button class="btn primary" id="finalDownloadBtn">Download</button>
+        <button class="btn ghost" id="backToEditBtn" type="button">Back</button>
+        <button class="btn primary" id="finalDownloadBtn" type="button">Download</button>
       </div>
     </div>
   </div>
